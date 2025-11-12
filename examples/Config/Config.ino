@@ -3,6 +3,13 @@
 Mycila::Config config;
 Preferences prefs;
 
+static void assertEquals(const Mycila::ValueVariant& actual, const Mycila::ValueVariant& expected) {
+  if (actual != expected) {
+    Serial.printf("Expected '%s' but got '%s'\n", config.toString(expected).c_str(), config.toString(actual).c_str());
+    assert(false);
+  }
+}
+
 static void assertEquals(const char* actual, const char* expected) {
   if (strcmp(actual, expected) != 0) {
     Serial.printf("Expected '%s' but got '%s'\n", expected, actual);
@@ -24,8 +31,8 @@ void setup() {
 
   // listeners
 
-  config.listen([](const char* key, const std::string& newValue) {
-    Serial.printf("(listen) '%s' => '%s'\n", key, newValue.c_str());
+  config.listen([](const char* key, const Mycila::ValueVariant& newValue) {
+    Serial.printf("(listen) '%s' => '%s'\n", key, config.toString(newValue).c_str());
   });
 
   config.listen([]() {
@@ -38,7 +45,7 @@ void setup() {
 
   // configure()
 
-  config.configure("key1", MYCILA_CONFIG_VALUE_FALSE);
+  config.configure("key1", false);
   config.configure("key2", "");
   config.configure("key3");
   config.configure("key4", "foo");
@@ -47,30 +54,32 @@ void setup() {
 
   // tests
 
-  assertEquals(config.get("key1"), MYCILA_CONFIG_VALUE_FALSE);
-  assertEquals(config.get("key2"), "");
-  assertEquals(config.get("key3"), "");
+  assertEquals(config.get<bool>("key1"), false);
+  assertEquals(config.get<std::string>("key2", "not_empty").c_str(), "");
+  assertEquals(config.get("key3", "abcd"), "");
 
   // check exists key
   assert(config.exists("key4"));
 
   // set global validator
-  assert(config.setValidator([](const char* key, const std::string& newValue) {
-    Serial.printf("(global validator) '%s' => '%s'\n", key, newValue.c_str());
+  assert(config.setValidator([](const char* key, const Mycila::ValueVariant& newValue) {
+    Serial.printf("(global validator) '%s' => '%s'\n", key, config.toString(newValue).c_str());
     return true;
   }));
 
   // set key
-  assert(config.set("key1", MYCILA_CONFIG_VALUE_TRUE));
-  assertEquals(config.get("key1"), MYCILA_CONFIG_VALUE_TRUE);
+  assert(config.set("key1", true));
+  assertEquals(config.get("key1").has_value(), true);
+  assertEquals(config.get("key1").value(), true);
+  assertEquals(config.get<bool>("key1"), true);
   assert(prefs.isKey("key1"));
 
   // set key to same value => no change
-  assert(config.set("key1", MYCILA_CONFIG_VALUE_TRUE) == Mycila::Config::Result::ALREADY_PERSISTED);
-  assert(!config.set("key1", MYCILA_CONFIG_VALUE_TRUE));
+  assert(config.set("key1", true) == Mycila::Config::Result::ALREADY_PERSISTED);
+  assert(!config.set("key1", true));
 
   // cache stored key
-  assertEquals(config.get("key4"), "bar"); // load key and cache
+  assertEquals(config.get<std::string>("key4"), "bar"); // load key and cache
 
   // set key to same value => no change
   assert(config.set("key4", "bar") == Mycila::Config::Result::ALREADY_PERSISTED);
@@ -78,12 +87,12 @@ void setup() {
 
   // set stored key to default value
   assert(config.set("key4", "foo"));
-  assertEquals(config.get("key4"), "foo");
+  assertEquals(config.get("key4", ""), "foo");
   assert(prefs.isKey("key4"));
 
   // set stored key to other value
   assert(config.set("key4", "bar"));
-  assertEquals(config.get("key4"), "bar");
+  assertEquals(config.get("key4", ""), "bar");
 
   // unset global validator
   assert(config.setValidator(nullptr));
@@ -91,26 +100,27 @@ void setup() {
   // unset stored key
   assert(config.unset("key4"));
   assert(!prefs.isKey("key4"));
-  assertEquals(config.get("key4"), "foo");
+  assertEquals(config.get("key4", ""), "foo");
 
   // unset non-existing key => noop
   assert(!config.unset("key4"));
-  assertEquals(config.get("key4"), "foo");
+  assertEquals(config.get("key4").value(), "foo");
 
   // set validator
-  assert(config.setValidator("key4", [](const char* key, const std::string& newValue) {
-    Serial.printf("(validator) '%s' => '%s'\n", key, newValue.c_str());
-    return newValue.compare("baz") == 0;
+  assert(config.setValidator("key4", [](const char* key, const Mycila::ValueVariant& newValue) {
+    Serial.printf("(validator) '%s' => '%s'\n", key, config.toString(newValue).c_str());
+    return std::holds_alternative<std::string>(newValue) && std::get<std::string>(newValue) == "baz";
+    //return newValue == (Mycila::ValueVariant)"baz";
   }));
 
   // try set a permitted value
   assert(config.set("key4", "baz"));
-  assertEquals(config.get("key4"), "baz");
+  assertEquals(config.get("key4", ""), "baz");
 
   // try set a NOT permitted value
   assert(config.set("key4", "bar") == Mycila::Config::Result::INVALID_VALUE);
   assert(!config.set("key4", "bar"));
-  assertEquals(config.get("key4"), "baz");
+  assertEquals(config.get("key4").value(), "baz");
 
   // unset validator
   assert(config.setValidator("key4", nullptr));
@@ -130,11 +140,20 @@ void setup() {
   config.backup(Serial);
   config.restore("key1=\nkey2=\nkey3=value3\nkey4=foo\n");
 
-  assertEquals(config.get("key6"), "6");
+  assertEquals(config.get("key6").value(), "6");
   config.set("key6", std::to_string(7));
-  assertEquals(config.get("key6"), "7");
+  assertEquals(config.get<std::string>("key6"), "7");
+
+
+  for (int i = 100; i < 180; i++) {
+    std::string key = "key_" + std::to_string(i);
+    config.configure(key.c_str(), "foo");
+    assert(config.set(key.c_str(), "bar"));
+    delay(10);
+  }
 }
 
 void loop() {
-  vTaskDelete(NULL);
+  Serial.printf("Free heap: %lu, min: %lu\n", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+  delay(5000);
 }

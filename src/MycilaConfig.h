@@ -4,20 +4,30 @@
  */
 #pragma once
 
-#include <Preferences.h>
-#include <Print.h>
+#include <algorithm>
+#include <functional>
 #include <map>
+#include <memory>
+#include <optional>
 #include <string>
+#include <variant>
 #include <vector>
+
+#include <Print.h>
 
 #ifdef MYCILA_JSON_SUPPORT
   #include <ArduinoJson.h>
 #endif
 
+#include "MycilaConfigTypes.h"
+#include "Storage/MycilaStorage.h"
+#include "Storage/MycilaPreferencesStorage.h"
+
 #define MYCILA_CONFIG_VERSION          "8.0.1"
 #define MYCILA_CONFIG_VERSION_MAJOR    8
 #define MYCILA_CONFIG_VERSION_MINOR    0
 #define MYCILA_CONFIG_VERSION_REVISION 1
+#define TAG                            "CONFIG"
 
 // suffix to use for a setting key enabling a feature
 #ifndef MYCILA_CONFIG_KEY_ENABLE_SUFFIX
@@ -35,24 +45,8 @@
   #endif
 #endif
 
-#ifndef MYCILA_CONFIG_VALUE_TRUE
-  #define MYCILA_CONFIG_VALUE_TRUE "true"
-#endif
-
-#ifndef MYCILA_CONFIG_VALUE_FALSE
-  #define MYCILA_CONFIG_VALUE_FALSE "false"
-#endif
-
-#ifndef MYCILA_CONFIG_EXTENDED_BOOL_VALUE_PARSING
-  #define MYCILA_CONFIG_EXTENDED_BOOL_VALUE_PARSING 1
-#endif
-
 namespace Mycila {
-  typedef std::function<void(const char* key, const std::string& newValue)> ConfigChangeCallback;
-  typedef std::function<void()> ConfigRestoredCallback;
-  typedef std::function<bool(const char* key, const std::string& newValue)> ConfigValidatorCallback;
-
-  class Config {
+  class WrappedConfig {
     public:
       enum class Result {
         PERSISTED,
@@ -60,6 +54,7 @@ namespace Mycila {
         ALREADY_PERSISTED,
         SAME_AS_DEFAULT,
         INVALID_VALUE,
+        TYPE_MISMATCH,
         FAIL_ON_WRITE
       };
 
@@ -73,10 +68,11 @@ namespace Mycila {
           Result _result;
       };
 
-      ~Config();
+      WrappedConfig(std::shared_ptr<Storage> storage) : _storage(std::move(storage)) {}
+      ~WrappedConfig() = default;
 
       // Add a new configuration key with its default value
-      void configure(const char* key, std::string defaultValue = std::string());
+      void configure(const char* key, ValueVariant defaultValue = std::string{});
 
       // starts the config system
       void begin(const char* name = "CONFIG");
@@ -96,21 +92,56 @@ namespace Mycila {
       // returns false if the key is not found
       bool exists(const char* key) const { return std::find(_keys.begin(), _keys.end(), key) != _keys.end(); };
 
-      // get the value of a setting key
-      // returns "" if the key is not found, never returns nullptr
-      const char* get(const char* key) const { return getString(key).c_str(); }
-      const std::string& getString(const char* key) const;
-      bool getBool(const char* key) const;
-      long getLong(const char* key) const { return std::stol(get(key)); } // NOLINT
-      int getInt(const char* key) const { return std::stoi(get(key)); }   // NOLINT
-      float getFloat(const char* key) const { return std::stof(get(key)); }
-      bool isEmpty(const char* key) const { return get(key)[0] == '\0'; }
-      bool isEqual(const char* key, const std::string& value) const { return get(key) == value; }
-      bool isEqual(const char* key, const char* value) const { return strcmp(get(key), value) == 0; }
+      // get the optional value variant of a setting key
+      std::optional<const Mycila::ValueVariant> get(const char* key) const;
 
-      const SetResult set(const char* key, std::string value, bool fireChangeCallback = true);
-      bool set(const std::map<const char*, std::string>& settings, bool fireChangeCallback = true);
-      bool setBool(const char* key, bool value) { return set(key, value ? MYCILA_CONFIG_VALUE_TRUE : MYCILA_CONFIG_VALUE_FALSE); }
+      // get a pointer to a string or default of a setting key
+      const char* get(const char* key, const char* defaultValue) const;
+
+      // get the value or default of a setting key
+      template <typename T>
+      const T& get(const char* key, const T& defaultValue = T{}) const {
+        // check if we have a cached value
+        auto it = _cache.find(key);
+        if (it != _cache.end() && std::holds_alternative<T>(it->second)) {
+          return std::get<T>(it->second);
+        }
+
+        // not in cache ? is it a real key ?
+        if (!exists(key)) {
+          ESP_LOGW(TAG, "get(%s): Key unknown", key);
+          return defaultValue;
+        }
+
+        // real key exists ?
+        if (_storage->exists(key)) {
+          _cache[key] = _storage->get(key, _defaults.at(key));
+          ESP_LOGD(TAG, "get(%s): Key cached", key);
+
+          if (std::holds_alternative<T>(_cache[key])) {
+            return std::get<T>(_cache[key]);
+          }
+        }
+
+        // key does not exist, or not assigned to a value
+        _cache[key] = _defaults.at(key);
+        return std::get<T>(_cache[key]);
+      }
+
+      /*template <typename T>
+      T get(const char* key, T defaultValue = T{}) const {
+        const auto optValue = get(key);
+        if (optValue.has_value() && std::holds_alternative<T>(optValue.value())) {
+          return std::get<T>(optValue.value());
+        }
+
+        return defaultValue;
+      }*/
+
+      bool isEqual(const char* key, const ValueVariant& value) const;
+
+      const SetResult set(const char* key, ValueVariant value, bool fireChangeCallback = true);
+      bool set(const std::map<const char*, ValueVariant>& settings, bool fireChangeCallback = true);
 
       bool unset(const char* key, bool fireChangeCallback = true);
 
@@ -119,7 +150,7 @@ namespace Mycila {
 
       void backup(Print& out); // NOLINT
       bool restore(const char* data);
-      bool restore(const std::map<const char*, std::string>& settings);
+      bool restore(const std::map<const char*, ValueVariant>& settings);
 
       // clear all saved settings and current cache
       void clear();
@@ -131,18 +162,29 @@ namespace Mycila {
       const char* keyRef(const char* buffer) const;
 
 #ifdef MYCILA_JSON_SUPPORT
-      void toJson(const JsonObject& root);
+      bool toJson(JsonObject root, const char* key);
+      void toJson(JsonObject root);
 #endif
 
-    private:
+      static std::string toString(const ValueVariant& variant);
+      static ValueVariant toVariant(const std::string& value, const ValueVariant& def);
+
+    protected:
+      std::shared_ptr<Storage> _storage;
       ConfigChangeCallback _changeCallback = nullptr;
       ConfigRestoredCallback _restoreCallback = nullptr;
       ConfigValidatorCallback _globalValidatorCallback = nullptr;
       std::vector<const char*> _keys;
-      mutable Preferences _prefs;
-      mutable std::map<const char*, std::string> _defaults;
-      mutable std::map<const char*, std::string> _cache;
+      mutable std::map<const char*, ValueVariant> _defaults;
+      mutable std::map<const char*, ValueVariant> _cache;
       mutable std::map<const char*, ConfigValidatorCallback> _validators;
-      const std::string empty;
+      const ValueVariant empty = std::string{};
+  };
+
+  class Config : public WrappedConfig {
+    public:
+      [[deprecated]]
+      Config() : WrappedConfig(std::make_shared<PreferencesStorage>()) {}
+      ~Config() = default;
   };
 } // namespace Mycila
