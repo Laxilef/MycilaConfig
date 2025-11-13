@@ -143,14 +143,16 @@ const Mycila::WrappedConfig::SetResult Mycila::WrappedConfig::set(const char* ke
     return Result::TYPE_MISMATCH;
   }
 
+  const bool keyPersisted = _storage->exists(pKey);
+
   // check if the value is the same as the default
-  if (value == _defaults.at(pKey)) {
+  if (!keyPersisted && value == _defaults.at(pKey)) {
     ESP_LOGD(TAG, "set(%s): SAME_AS_DEFAULT", pKey);
     return Result::SAME_AS_DEFAULT;
   }
 
   // check if the value is the same as the current
-  if (value == get(pKey)) {
+  if (keyPersisted && value == get(pKey)) {
     ESP_LOGD(TAG, "set(%s): ALREADY_PERSISTED", pKey);
     return Result::ALREADY_PERSISTED;
   }
