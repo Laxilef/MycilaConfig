@@ -6,20 +6,26 @@
 #define KEY_WIFI_SSID "wifi_ssid"
 #define KEY_WIFI_PWD "wifi_pwd"
 
-Mycila::Config config;
+Mycila::WrappedConfig config(std::make_shared<Mycila::PreferencesStorage>());
 
-uint8_t getLogLevel() { return config.getBool(KEY_DEBUG_ENABLE) ? ARDUHAL_LOG_LEVEL_DEBUG : ARDUHAL_LOG_LEVEL_INFO; }
+uint8_t getLogLevel() {
+  return config.get<bool>(KEY_DEBUG_ENABLE) ? ARDUHAL_LOG_LEVEL_DEBUG : ARDUHAL_LOG_LEVEL_INFO;
+}
 
 void setup() {
   Serial.begin(115200);
   while (!Serial)
     continue;
 
+  config.configure(KEY_DEBUG_ENABLE, false);
+  config.configure(KEY_WIFI_SSID, "My_wifi");
+  config.configure(KEY_WIFI_PWD, "Super_Secret_Password");
+
   config.begin();
 
-  config.configure(KEY_DEBUG_ENABLE, MYCILA_CONFIG_VALUE_FALSE);
-  config.configure(KEY_WIFI_SSID);
-  config.configure(KEY_WIFI_PWD);
+  // Important for this example
+  // Clear the old configuration
+  config.clear();
 }
 
 void loop() {
@@ -33,11 +39,7 @@ void loop() {
   config.backup(content);
   Serial.println(content);
 
-  assert(getLogLevel() == ARDUHAL_LOG_LEVEL_INFO);
-
-  config.setBool(KEY_DEBUG_ENABLE, !config.getBool(KEY_DEBUG_ENABLE));
-
-  assert(getLogLevel() == ARDUHAL_LOG_LEVEL_DEBUG);
+  assert(config.set(KEY_DEBUG_ENABLE, !config.get<bool>(KEY_DEBUG_ENABLE)));
 
   delay(5000);
 }
