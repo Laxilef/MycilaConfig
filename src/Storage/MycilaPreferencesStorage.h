@@ -27,7 +27,7 @@ namespace Mycila {
       }
 
       virtual bool unset(const char* key) override {
-        return _prefs.remove(key);
+        return _prefs.isKey(key) && _prefs.remove(key);
       }
 
       virtual bool set(const char* key, const ValueVariant& value) override {
@@ -52,6 +52,10 @@ namespace Mycila {
       }
 
       virtual ValueVariant get(const char* key, const ValueVariant& defaultValue) const override {
+        if (!_prefs.isKey(key)) {
+          return {};
+        }
+
         return std::visit([&](auto&& def) -> ValueVariant {
           using T = std::decay_t<decltype(def)>;
           if      constexpr (std::is_same_v<T, bool>)         return _prefs.getBool(key, def);

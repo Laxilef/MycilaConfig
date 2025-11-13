@@ -10,6 +10,7 @@
 
 namespace Mycila {
   using ValueVariant = std::variant<
+    std::monostate, // as null
     bool,
     int8_t, uint8_t,
     int16_t, uint16_t,

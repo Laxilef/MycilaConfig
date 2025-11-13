@@ -8,7 +8,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -90,10 +89,10 @@ namespace Mycila {
       bool setValidator(const char* key, ConfigValidatorCallback callback);
 
       // returns false if the key is not found
-      bool exists(const char* key) const { return std::find(_keys.begin(), _keys.end(), key) != _keys.end(); };
+      bool exists(const char* key) const;
 
-      // get the optional value variant of a setting key
-      std::optional<const Mycila::ValueVariant> get(const char* key) const;
+      // get the value variant of a setting key
+      const Mycila::ValueVariant& get(const char* key) const;
 
       // get a pointer to a string or default of a setting key
       const char* get(const char* key, const char* defaultValue) const;
@@ -101,42 +100,13 @@ namespace Mycila {
       // get the value or default of a setting key
       template <typename T>
       const T& get(const char* key, const T& defaultValue = T{}) const {
-        // check if we have a cached value
-        auto it = _cache.find(key);
-        if (it != _cache.end() && std::holds_alternative<T>(it->second)) {
-          return std::get<T>(it->second);
-        }
-
-        // not in cache ? is it a real key ?
-        if (!exists(key)) {
-          ESP_LOGW(TAG, "get(%s): Key unknown", key);
+        auto& value = get(key);
+        if (value.index() == 0 || !std::holds_alternative<T>(value)) {
           return defaultValue;
         }
 
-        // real key exists ?
-        if (_storage->exists(key)) {
-          _cache[key] = _storage->get(key, _defaults.at(key));
-          ESP_LOGD(TAG, "get(%s): Key cached", key);
-
-          if (std::holds_alternative<T>(_cache[key])) {
-            return std::get<T>(_cache[key]);
-          }
-        }
-
-        // key does not exist, or not assigned to a value
-        _cache[key] = _defaults.at(key);
-        return std::get<T>(_cache[key]);
+        return std::get<T>(value);
       }
-
-      /*template <typename T>
-      T get(const char* key, T defaultValue = T{}) const {
-        const auto optValue = get(key);
-        if (optValue.has_value() && std::holds_alternative<T>(optValue.value())) {
-          return std::get<T>(optValue.value());
-        }
-
-        return defaultValue;
-      }*/
 
       bool isEqual(const char* key, const ValueVariant& value) const;
 
@@ -170,6 +140,8 @@ namespace Mycila {
       static ValueVariant toVariant(const std::string& value, const ValueVariant& def);
 
     protected:
+      bool _began = false;
+      static const ValueVariant empty;
       std::shared_ptr<Storage> _storage;
       ConfigChangeCallback _changeCallback = nullptr;
       ConfigRestoredCallback _restoreCallback = nullptr;
@@ -178,7 +150,6 @@ namespace Mycila {
       mutable std::map<const char*, ValueVariant> _defaults;
       mutable std::map<const char*, ValueVariant> _cache;
       mutable std::map<const char*, ConfigValidatorCallback> _validators;
-      const ValueVariant empty = std::string{};
   };
 
   class Config : public WrappedConfig {
