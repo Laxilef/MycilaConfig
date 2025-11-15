@@ -102,14 +102,16 @@ const Mycila::ValueVariant& Mycila::WrappedConfig::get(const char* key) const {
 
   // key in storage exists ?
   if (_storage->exists(pKey)) {
-    _cache[pKey] = _storage->get(pKey, _defaults.at(pKey));
-    ESP_LOGD(TAG, "get(%s): Key cached", pKey);
-    return _cache[pKey];
+    auto value = _storage->get(pKey, _defaults.at(pKey));
+    if (value.index() != 0) {
+      _cache[pKey] = std::move(value);
+      ESP_LOGD(TAG, "get(%s): Key cached", pKey);
+      return _cache[pKey];
+    }
   }
 
   // key does not exist, or not assigned to a value
-  _cache[pKey] = _defaults.at(pKey);
-  return _cache[pKey];
+  return _defaults.at(pKey);
 }
 
 const char* Mycila::WrappedConfig::get(const char* key, const char* defaultValue) const {
