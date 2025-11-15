@@ -6,12 +6,10 @@
 
 #include <assert.h>
 
-const Mycila::ValueVariant Mycila::WrappedConfig::empty = std::monostate{};
-
 void Mycila::WrappedConfig::begin(const char* name) {
   assert(!_began);
 
-  ESP_LOGI(TAG, "Initializing Config System: %s...", name);
+  ESP_LOGI(MYCILA_CONFIG_LOG_TAG, "Initializing Config System: %s...", name);
 
   // sort keys
   std::sort(
@@ -20,26 +18,33 @@ void Mycila::WrappedConfig::begin(const char* name) {
       return strcmp(a, b) < 0;
     }
   );
-  
+
   // begin storage
   assert(_storage->begin(name));
+  _storage->setWrapper(this);
+  _began = true;
 
   // load from storage
-  for(auto& [key, value] : _storage->load(_keys)) {
-    _cache[key] = std::move(toVariant(value, _defaults[key]));
-    ESP_LOGD(TAG, "begin(): loaded '%s' = '%s'", key, toString(_cache[key]).c_str());
-  }
+  for(auto& [key, value] : _storage->load()) {
+    if (!exists(key)) {
+      continue;
+    }
 
-  _began = true;
+    auto variant = toVariant(value, _defaults[key]);
+    if (variant != emptyVariant) {
+      _cache[key] = std::move(variant);
+      ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "begin(): loaded '%s' = '%s'", key, toString(_cache[key]).c_str());
+    }
+  }
 }
 
 bool Mycila::WrappedConfig::setValidator(ConfigValidatorCallback callback) {
   if (callback) {
-    _globalValidatorCallback = callback;
-    ESP_LOGD(TAG, "setValidator(callback)");
+    _globalValidatorCallback = std::move(callback);
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(callback)");
   } else {
     _globalValidatorCallback = nullptr;
-    ESP_LOGD(TAG, "setValidator(nullptr)");
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(nullptr)");
   }
   return true;
 }
@@ -48,16 +53,16 @@ bool Mycila::WrappedConfig::setValidator(const char* key, ConfigValidatorCallbac
   // check if the key is valid
   auto pKey = keyRef(key);
   if (pKey == nullptr) {
-    ESP_LOGW(TAG, "setValidator(%s): Unknown key!", key);
+    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "setValidator(%s): Unknown key!", key);
     return false;
   }
 
   if (callback) {
-    _validators[pKey] = callback;
-    ESP_LOGD(TAG, "setValidator(%s, callback)", pKey);
+    _validators[pKey] = std::move(callback);
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, callback)", pKey);
   } else {
     _validators.erase(pKey);
-    ESP_LOGD(TAG, "setValidator(%s, nullptr)", pKey);
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, nullptr)", pKey);
   }
 
   return true;
@@ -81,7 +86,7 @@ void Mycila::WrappedConfig::configure(const char* key, ValueVariant defaultValue
 
   _keys.push_back(key);
   _defaults[key] = std::move(defaultValue);
-  ESP_LOGD(TAG, "Config Key '%s' defaults to '%s'", key, toString(_defaults[key]).c_str());
+  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config Key '%s' defaults to '%s'", key, toString(_defaults[key]).c_str());
 }
 
 const Mycila::ValueVariant& Mycila::WrappedConfig::get(const char* key) const {
@@ -90,8 +95,8 @@ const Mycila::ValueVariant& Mycila::WrappedConfig::get(const char* key) const {
   // is it a real key ?
   auto pKey = keyRef(key);
   if (pKey == nullptr) {
-    ESP_LOGW(TAG, "get(%s): Unknown key!", key);
-    return empty;
+    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "get(%s): Unknown key!", key);
+    return emptyVariant;
   }
 
   // check if we have a cached value
@@ -102,10 +107,10 @@ const Mycila::ValueVariant& Mycila::WrappedConfig::get(const char* key) const {
 
   // key in storage exists ?
   if (_storage->exists(pKey)) {
-    auto value = _storage->get(pKey, _defaults.at(pKey));
-    if (value.index() != 0) {
-      _cache[pKey] = std::move(value);
-      ESP_LOGD(TAG, "get(%s): Key cached", pKey);
+    auto variant = _storage->get(pKey, _defaults.at(pKey));
+    if (variant != emptyVariant) {
+      _cache[pKey] = std::move(variant);
+      ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "get(%s): Key cached", pKey);
       return _cache[pKey];
     }
   }
@@ -115,73 +120,80 @@ const Mycila::ValueVariant& Mycila::WrappedConfig::get(const char* key) const {
 }
 
 const char* Mycila::WrappedConfig::get(const char* key, const char* defaultValue) const {
-  const auto& value = get(key);
-  if (value.index() == 0 || !std::holds_alternative<std::string>(value)) {
+  const auto& variant = get(key);
+  if (variant == emptyVariant || !std::holds_alternative<std::string>(variant)) {
     return defaultValue;
   }
 
-  return std::get<std::string>(value).c_str();
+  return std::get<std::string>(variant).c_str();
 }
 
-bool Mycila::WrappedConfig::isEqual(const char* key, const ValueVariant& value) const {
+bool Mycila::WrappedConfig::isEqual(const char* key, const ValueVariant& variant) const {
   assert(_began);
 
-  return get(key) == value;
+  return get(key) == variant;
 }
 
-const Mycila::WrappedConfig::SetResult Mycila::WrappedConfig::set(const char* key, ValueVariant value, bool fireChangeCallback) {
+const Mycila::WrappedConfig::SetResult Mycila::WrappedConfig::set(const char* key, ValueVariant variant, bool fireChangeCallback) {
   assert(_began);
 
   // check if the key is valid
   auto pKey = keyRef(key);
   if (pKey == nullptr) {
-    ESP_LOGW(TAG, "set(%s): UNKNOWN_KEY", key);
+    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "set(%s): UNKNOWN_KEY", key);
     return Result::UNKNOWN_KEY;
   }
 
   // check if the type valid
-  if (value.index() != _defaults.at(pKey).index()) {
-    ESP_LOGD(TAG, "set(%s): TYPE_MISMATCH", pKey);
+  if (variant.index() != _defaults.at(pKey).index()) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): TYPE_MISMATCH", pKey);
     return Result::TYPE_MISMATCH;
   }
 
-  const bool keyPersisted = _storage->exists(pKey);
-
   // check if the value is the same as the default
-  if (!keyPersisted && value == _defaults.at(pKey)) {
-    ESP_LOGD(TAG, "set(%s): SAME_AS_DEFAULT", pKey);
+  if (variant == _defaults.at(pKey)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): SAME_AS_DEFAULT", pKey);
+
+    if (_storage->exists(pKey)) {
+      _storage->unset(pKey);
+    }
+
+    if (_cache.count(pKey)) {
+      _cache.erase(pKey);
+    }
+
     return Result::SAME_AS_DEFAULT;
   }
 
   // check if the value is the same as the current
-  if (keyPersisted && value == get(pKey)) {
-    ESP_LOGD(TAG, "set(%s): ALREADY_PERSISTED", pKey);
+  if (_cache.count(pKey) && variant == get(pKey)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): ALREADY_PERSISTED", pKey);
     return Result::ALREADY_PERSISTED;
   }
 
   // check if we have a global validator
   // and check if the value is valid
-  if (_globalValidatorCallback && !_globalValidatorCallback(pKey, value)) {
-    ESP_LOGD(TAG, "set(%s): INVALID_VALUE", pKey);
+  if (_globalValidatorCallback && !_globalValidatorCallback(pKey, variant)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pKey);
     return Result::INVALID_VALUE;
   }
 
   // check if we have a specific validator for the key
   // and check if the value is valid
   auto it = _validators.find(pKey);
-  if (it != _validators.end() && !it->second(pKey, value)) {
-    ESP_LOGD(TAG, "set(%s): INVALID_VALUE", pKey);
+  if (it != _validators.end() && !it->second(pKey, variant)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pKey);
     return Result::INVALID_VALUE;
   }
 
   // update failed ?
-  if (!_storage->set(pKey, value)) {
-    ESP_LOGD(TAG, "set(%s): FAIL_ON_WRITE", pKey);
+  if (!_storage->set(pKey, variant)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): FAIL_ON_WRITE", pKey);
     return Result::FAIL_ON_WRITE;
   }
 
-  _cache[pKey] = std::move(value);
-  ESP_LOGD(TAG, "set(%s): PERSISTED", pKey);
+  _cache[pKey] = std::move(variant);
+  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): PERSISTED", pKey);
   if (fireChangeCallback && _changeCallback)
     _changeCallback(pKey, _cache[pKey]);
 
@@ -212,21 +224,22 @@ bool Mycila::WrappedConfig::unset(const char* key, bool fireChangeCallback) {
   // check if the key is valid
   auto pKey = keyRef(key);
   if (pKey == nullptr) {
-    ESP_LOGW(TAG, "unset(%s): Unknown key!", key);
+    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "unset(%s): Unknown key!", key);
     return false;
   }
 
   // key not removed
   if (!_storage->unset(pKey)) {
-    ESP_LOGW(TAG, "unset(%s): Failed to unset!", pKey);
+    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "unset(%s): Failed to unset!", pKey);
     return false;
   }
 
   // key there and to remove
   _cache.erase(pKey);
-  ESP_LOGD(TAG, "unset(%s)", pKey);
-  if (fireChangeCallback && _changeCallback)
-    _changeCallback(pKey, empty);
+  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "unset(%s)", pKey);
+  if (fireChangeCallback && _changeCallback) {
+    _changeCallback(pKey, emptyVariant);
+  }
 
   return true;
 }
@@ -235,10 +248,10 @@ void Mycila::WrappedConfig::backup(Print& out) {
   assert(_began);
 
   for (auto& key : _keys) {
-    auto value = get(key);
+    const auto& variant = get(key);
     out.print(key);
     out.print('=');
-    out.print(toString(value).c_str());
+    out.print(toString(variant).c_str());
     out.print("\n");
   }
 }
@@ -259,12 +272,12 @@ bool Mycila::WrappedConfig::restore(const char* data) {
       if (!end)
         end = strchr(start, '\n');
       if (!end) {
-        ESP_LOGW(TAG, "restore(%s): Invalid data!", key);
+        ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "restore(%s): Invalid data!", key);
         return false;
       }
 
       auto pKey = keyRef(key);
-      if (pKey == nullptr) {
+      if (pKey != nullptr) {
         std::string val(start, end - start);
         settings[pKey] = toVariant(val, _defaults.at(pKey));
       }
@@ -276,14 +289,14 @@ bool Mycila::WrappedConfig::restore(const char* data) {
 bool Mycila::WrappedConfig::restore(const std::map<const char*, ValueVariant>& settings) {
   assert(_began);
 
-  ESP_LOGD(TAG, "Restoring %d settings...", settings.size());
+  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Restoring %d settings...", settings.size());
   bool restored = set(settings, false);
   if (restored) {
-    ESP_LOGD(TAG, "Config restored");
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config restored");
     if (_restoreCallback)
       _restoreCallback();
   } else
-    ESP_LOGD(TAG, "No change detected");
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "No change detected");
   return restored;
 }
 
@@ -327,13 +340,13 @@ const char* Mycila::WrappedConfig::keyRef(const char* buffer) const {
 bool Mycila::WrappedConfig::toJson(JsonObject root, const char* key) {
   assert(_began);
 
-  return std::visit([&](auto&& value) -> bool { 
+  return std::visit([&](auto&& value) -> bool {
     using T = std::decay_t<decltype(value)>;
 
     if constexpr (std::is_same_v<T, bool> || std::is_arithmetic_v<T>) {
       root[key] = value;
       return true;
-    
+
     } else if constexpr (std::is_same_v<T, std::string>) {
 #ifdef MYCILA_CONFIG_PASSWORD_MASK
       root[key] = !isPasswordKey(key) ? value : MYCILA_CONFIG_PASSWORD_MASK;
@@ -357,7 +370,7 @@ void Mycila::WrappedConfig::toJson(JsonObject root) {
 #endif
 
 std::string Mycila::WrappedConfig::toString(const Mycila::ValueVariant& variant) {
-  return std::visit([](auto&& value) -> std::string { 
+  return std::visit([](auto&& value) -> std::string {
     using T = std::decay_t<decltype(value)>;
 
     if constexpr (std::is_same_v<T, bool>)              return value ? "true" : "false";
@@ -368,7 +381,7 @@ std::string Mycila::WrappedConfig::toString(const Mycila::ValueVariant& variant)
 }
 
 Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, const Mycila::ValueVariant& def) {
-  return std::visit([&](auto&& variant) -> ValueVariant { 
+  return std::visit([&](auto&& variant) -> ValueVariant {
     using T = std::decay_t<decltype(variant)>;
 
     if constexpr (std::is_same_v<T, bool>) {
@@ -378,15 +391,15 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return false;
       }
     }
-    
+
     if constexpr (std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t>) {
       char* endPtr;
       auto val = strtol(value.c_str(), &endPtr, 10);
       if (*endPtr == '\0') {
         return static_cast<T>(val);
-      } 
+      }
     }
-    
+
     if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t>) {
       char* endPtr;
       auto val = strtoul(value.c_str(), &endPtr, 10);
@@ -394,7 +407,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return static_cast<T>(val);
       }
     }
-    
+
     if constexpr (std::is_same_v<T, int64_t>) {
       char* endPtr;
       auto val = strtoll(value.c_str(), &endPtr, 10);
@@ -402,7 +415,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return static_cast<T>(val);
       }
     }
-    
+
     if constexpr (std::is_same_v<T, uint64_t>) {
       char* endPtr;
       auto val = strtoull(value.c_str(), &endPtr, 10);
@@ -410,7 +423,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return static_cast<T>(val);
       }
     }
-    
+
     if constexpr (std::is_same_v<T, float>) {
       char* endPtr;
       auto val = strtof(value.c_str(), &endPtr);
@@ -418,7 +431,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return static_cast<T>(val);
       }
     }
-    
+
     if constexpr (std::is_same_v<T, double>) {
       char* endPtr;
       auto val = strtod(value.c_str(), &endPtr);
@@ -426,11 +439,11 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return static_cast<T>(val);
       }
     }
-    
+
     if constexpr (std::is_same_v<T, std::string>) {
       return std::move(value);
     }
 
-    return def;
+    return emptyVariant;
   }, def);
 }

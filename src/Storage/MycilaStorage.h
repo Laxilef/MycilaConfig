@@ -6,12 +6,15 @@
 #include "MycilaConfigTypes.h"
 
 namespace Mycila {
+  class WrappedConfig;
   class Storage {
     public:
       virtual ~Storage() { end(); };
       virtual bool begin(const char* name = "config")  = 0;
-      virtual bool end() { return true; }
-      virtual std::map<const char*, std::string> load(const std::vector<const char*>& keys) { return {}; }
+      virtual bool end() { flush(); return true; }
+      virtual void setWrapper(WrappedConfig*) {}
+      virtual bool flush() { return false; }
+      virtual std::map<const char*, std::string> load() { return {}; }
       virtual bool clear() = 0;
       virtual bool exists(const char* key) = 0;
       virtual bool set(const char* key, const ValueVariant& value) = 0;

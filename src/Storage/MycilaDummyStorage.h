@@ -12,60 +12,50 @@ namespace Mycila {
         return true;
       }
 
+      void setWrapper(WrappedConfig* wrapper) override {
+        _wrapper = wrapper;
+      }
+
       bool clear() override {
-        _keys.clear();
         return true;
       }
 
       virtual bool exists(const char* key) override {
-        auto it = std::lower_bound(
-          _keys.begin(), _keys.end(), key,
-          [](const char* a, const char* b) {
-            return strcmp(a, b) < 0;
-          }
-        );
-
-        return it != _keys.end() && strcmp(*it, key) == 0;
+        const char* pKey = _wrapper ? _wrapper->keyRef(key) : nullptr;
+        return pKey && _wrapper->cache().count(pKey);
       }
 
       virtual bool unset(const char* key) override {
-        auto it = std::lower_bound(
-          _keys.begin(), _keys.end(), key,
-          [](const char* a, const char* b) {
-            return strcmp(a, b) < 0;
-          }
-        );
-
-        if (it != _keys.end() && strcmp(*it, key) == 0) {
-          _keys.erase(it);
-          return true;
-
-        } else {
-          return false;
-        }
+        return exists(key);
       }
 
-      virtual bool set(const char* key, const ValueVariant& value) override {
-        if (!exists(key)) {
-          _keys.push_back(key);
+      virtual bool set(const char* key, const ValueVariant& variant) override {
+        const char* pKey = _wrapper ? _wrapper->keyRef(key) : nullptr;
+        if (pKey == nullptr) {
+          return false;
+        }
 
-          // sort keys
-          std::sort(
-            _keys.begin(), _keys.end(),
-            [](const char* a, const char* b) {
-              return strcmp(a, b) < 0;
-            }
-          );
+        auto it = _wrapper->cache().find(pKey);
+        if (it != _wrapper->cache().end()) {
+          return it->second != variant;
         }
 
         return true;
       }
 
       virtual ValueVariant get(const char* key, const ValueVariant& defaultValue) const override {
-        return defaultValue;
+        const char* pKey = _wrapper ? _wrapper->keyRef(key) : nullptr;
+        if (pKey) {
+          auto it = _wrapper->cache().find(pKey);
+          if (it != _wrapper->cache().end()) {
+            return it->second;
+          }
+        }
+
+        return emptyVariant;
       }
 
     private:
-      std::vector<const char*> _keys;
+      WrappedConfig* _wrapper = nullptr;
   };
 } // namespace Mycila

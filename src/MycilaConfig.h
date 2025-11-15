@@ -26,7 +26,7 @@
 #define MYCILA_CONFIG_VERSION_MAJOR    8
 #define MYCILA_CONFIG_VERSION_MINOR    0
 #define MYCILA_CONFIG_VERSION_REVISION 1
-#define TAG                            "CONFIG"
+#define MYCILA_CONFIG_LOG_TAG          "CONFIG"
 
 // suffix to use for a setting key enabling a feature
 #ifndef MYCILA_CONFIG_KEY_ENABLE_SUFFIX
@@ -68,7 +68,7 @@ namespace Mycila {
       };
 
       WrappedConfig(std::shared_ptr<Storage> storage) : _storage(std::move(storage)) {}
-      ~WrappedConfig() = default;
+      virtual ~WrappedConfig() { flush(); };
 
       // Add a new configuration key with its default value
       void configure(const char* key, ValueVariant defaultValue = std::string{});
@@ -76,11 +76,14 @@ namespace Mycila {
       // starts the config system
       void begin(const char* name = "CONFIG");
 
+      // Write config if necessary
+      bool flush() { return _storage->flush(); }
+
       // register a callback to be called when a config value changes
-      void listen(ConfigChangeCallback callback) { _changeCallback = callback; }
+      void listen(ConfigChangeCallback callback) { _changeCallback = std::move(callback); }
 
       // register a callback to be called when the configuration is restored
-      void listen(ConfigRestoredCallback callback) { _restoreCallback = callback; }
+      void listen(ConfigRestoredCallback callback) { _restoreCallback = std::move(callback); }
 
       // register a global callback to be called before a config value changes. You can pass a null callback to remove an existing one
       bool setValidator(ConfigValidatorCallback callback);
@@ -100,12 +103,12 @@ namespace Mycila {
       // get the value or default of a setting key
       template <typename T>
       const T& get(const char* key, const T& defaultValue = T{}) const {
-        auto& value = get(key);
-        if (value.index() == 0 || !std::holds_alternative<T>(value)) {
+        const auto& variant = get(key);
+        if (variant == emptyVariant || !std::holds_alternative<T>(variant)) {
           return defaultValue;
         }
 
-        return std::get<T>(value);
+        return std::get<T>(variant);
       }
 
       bool isEqual(const char* key, const ValueVariant& value) const;
@@ -128,6 +131,9 @@ namespace Mycila {
       // get list of keys
       const std::vector<const char*>& keys() const { return _keys; }
 
+      // get cached values
+      const std::map<const char*, ValueVariant>& cache() const { return _cache; }
+
       // this method can be used to find the right pointer to a supported key given a random buffer
       const char* keyRef(const char* buffer) const;
 
@@ -141,7 +147,6 @@ namespace Mycila {
 
     protected:
       bool _began = false;
-      static const ValueVariant empty;
       std::shared_ptr<Storage> _storage;
       ConfigChangeCallback _changeCallback = nullptr;
       ConfigRestoredCallback _restoreCallback = nullptr;

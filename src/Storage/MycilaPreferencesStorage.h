@@ -31,7 +31,10 @@ namespace Mycila {
       }
 
       virtual bool set(const char* key, const ValueVariant& value) override {
+        // Limitation of the Preferences library:
+        // https://docs.espressif.com/projects/esp-idf/en/v5.5.1/esp32/api-reference/storage/nvs_flash.html#keys-and-values
         assert(strlen(key) <= 15);
+
         return std::visit([&](auto&& v) -> bool {
           using T = std::decay_t<decltype(v)>;
           if      constexpr (std::is_same_v<T, bool>)         return _prefs.putBool(key, v);
@@ -53,7 +56,7 @@ namespace Mycila {
 
       virtual ValueVariant get(const char* key, const ValueVariant& defaultValue) const override {
         if (!_prefs.isKey(key)) {
-          return {};
+          return emptyVariant;
         }
 
         return std::visit([&](auto&& def) -> ValueVariant {
@@ -71,7 +74,8 @@ namespace Mycila {
           else if constexpr (std::is_same_v<T, float>)        return _prefs.getFloat(key, def);
           else if constexpr (std::is_same_v<T, double>)       return _prefs.getDouble(key, def);
           else if constexpr (std::is_same_v<T, std::string>)  return std::string{_prefs.getString(key, def.c_str()).c_str()};
-          return ValueVariant{};
+
+          return emptyVariant;
         }, defaultValue);
       }
 

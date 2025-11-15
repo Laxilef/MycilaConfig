@@ -1,8 +1,7 @@
 #include <MycilaConfig.h>
-#include <Storage/MycilaPreferencesStorage.h>
+#include <Storage/MycilaLittleFSStorage.h>
 
-Mycila::WrappedConfig config(std::make_shared<Mycila::PreferencesStorage>());
-Preferences prefs;
+Mycila::WrappedConfig config(std::make_shared<Mycila::LittleFSStorage>());
 
 static void assertEquals(const Mycila::ValueVariant& actual, const Mycila::ValueVariant& expected) {
   if (actual != expected) {
@@ -29,12 +28,19 @@ void setup() {
   while (!Serial)
     continue;
 
+  // Important for this example
+  // Clear the old configuration
+  assert(LittleFS.begin());
+  LittleFS.format();
+
   // prepare storage for tests
-  prefs.begin("CONFIG", false);
-  prefs.clear();
-  prefs.putString("key4", "bar");
-  prefs.end();
-  prefs.begin("CONFIG", true);
+  File f = LittleFS.open("/config.cfg", "w");
+  assert(f);
+  f.print("key4=bar\n");
+  f.close();
+
+  // start time
+  auto startTime = millis();
 
   // listeners
   config.listen([](const char* key, const Mycila::ValueVariant& newValue) {
@@ -59,7 +65,7 @@ void setup() {
   config.configure("key6", std::to_string(6));
 
   // begin()
-  config.begin();
+  config.begin("config");
 
   // tests
   assertEquals(config.get<bool>("key1", true), false);
@@ -87,7 +93,6 @@ void setup() {
   assertEquals(config.get("key1"), true);
   assertEquals(config.get("key1"), true);
   assertEquals(config.get<bool>("key1"), true);
-  assert(prefs.isKey("key1"));
 
   // set key to same value => no change
   assert(config.set("key1", true) == Mycila::Config::Result::ALREADY_PERSISTED);
@@ -103,7 +108,6 @@ void setup() {
   // set stored key to default value
   assert(config.set("key4", "foo") == Mycila::Config::Result::SAME_AS_DEFAULT);
   assertEquals(config.get("key4", ""), "foo");
-  assert(!prefs.isKey("key4"));
 
   // set stored key to other value
   assert(config.set("key4", "bar"));
@@ -114,7 +118,6 @@ void setup() {
 
   // unset stored key
   assert(config.unset("key4"));
-  assert(!prefs.isKey("key4"));
   assertEquals(config.get("key4", ""), "foo");
 
   // unset non-existing key => noop
@@ -157,7 +160,7 @@ void setup() {
   config.backup(Serial);
   Serial.println("===== END BACKUP =====\n");
 
-  config.set("key1", "value1");
+  config.set("key1", false);
   config.set("key3", "woof");
 
   Serial.println("======= BACKUP =======");
@@ -168,12 +171,18 @@ void setup() {
   assertEquals(config.get("key6"), "6");
   config.set("key6", std::to_string(7));
   assertEquals(config.get<std::string>("key6"), "7");
+
+  Serial.printf("Time consumption: %lu ms\n", millis() - startTime);
 }
 
 void loop() {
-  Serial.printf(
-    "Free heap: %lu, min: %lu, time consumption: %lu ms\n",
-    ESP.getFreeHeap(), ESP.getMinFreeHeap(), millis()
-  );
-  vTaskDelete(NULL);
+  Serial.printf("Free heap: %lu, min: %lu\n", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+
+  // Required to write the config to a file
+  // To optimize memory wear
+  if (config.flush()) {
+    Serial.println("Config has been successfully saved to file");
+  }
+
+  delay(5000);
 }

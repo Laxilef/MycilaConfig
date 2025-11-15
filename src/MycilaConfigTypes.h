@@ -20,6 +20,8 @@ namespace Mycila {
     std::string
   >;
 
+  const ValueVariant emptyVariant{};
+
   typedef std::function<void(const char* key, const ValueVariant& newValue)> ConfigChangeCallback;
   typedef std::function<void()> ConfigRestoredCallback;
   typedef std::function<bool(const char* key, const ValueVariant& newValue)> ConfigValidatorCallback;
