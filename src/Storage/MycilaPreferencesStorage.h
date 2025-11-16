@@ -49,7 +49,7 @@ namespace Mycila {
           else if constexpr (std::is_same_v<T, int>)          return _prefs.putInt(key, v);
           else if constexpr (std::is_same_v<T, float>)        return _prefs.putFloat(key, v);
           else if constexpr (std::is_same_v<T, double>)       return _prefs.putDouble(key, v);
-          else if constexpr (std::is_same_v<T, std::string>)  return _prefs.putString(key, v.c_str()) == v.size();
+          else if constexpr (std::is_same_v<T, LazyString>)   return _prefs.putString(key, v.c_str()) == v.size();
           return false;
         }, value);
       }
@@ -73,7 +73,7 @@ namespace Mycila {
           else if constexpr (std::is_same_v<T, int>)          return static_cast<int>(_prefs.getInt(key, def));
           else if constexpr (std::is_same_v<T, float>)        return _prefs.getFloat(key, def);
           else if constexpr (std::is_same_v<T, double>)       return _prefs.getDouble(key, def);
-          else if constexpr (std::is_same_v<T, std::string>)  return std::string{_prefs.getString(key, def.c_str()).c_str()};
+          else if constexpr (std::is_same_v<T, LazyString>)   return LazyString{_prefs.getString(key, def.c_str())};
 
           return emptyVariant;
         }, defaultValue);

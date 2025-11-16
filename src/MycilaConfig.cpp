@@ -121,11 +121,11 @@ const Mycila::ValueVariant& Mycila::WrappedConfig::get(const char* key) const {
 
 const char* Mycila::WrappedConfig::get(const char* key, const char* defaultValue) const {
   const auto& variant = get(key);
-  if (variant == emptyVariant || !std::holds_alternative<std::string>(variant)) {
+  if (variant == emptyVariant || !std::holds_alternative<LazyString>(variant)) {
     return defaultValue;
   }
 
-  return std::get<std::string>(variant).c_str();
+  return std::get<LazyString>(variant).c_str();
 }
 
 bool Mycila::WrappedConfig::isEqual(const char* key, const ValueVariant& variant) const {
@@ -347,11 +347,11 @@ bool Mycila::WrappedConfig::toJson(JsonObject root, const char* key) {
       root[key] = value;
       return true;
 
-    } else if constexpr (std::is_same_v<T, std::string>) {
+    } else if constexpr (std::is_same_v<T, LazyString>) {
 #ifdef MYCILA_CONFIG_PASSWORD_MASK
-      root[key] = !isPasswordKey(key) ? value : MYCILA_CONFIG_PASSWORD_MASK;
+      root[key] = !isPasswordKey(key) ? value.c_str() : MYCILA_CONFIG_PASSWORD_MASK;
 #else
-      root[key] = value;
+      root[key] = value.c_str();
 #endif
       return true;
     }
@@ -375,7 +375,7 @@ std::string Mycila::WrappedConfig::toString(const Mycila::ValueVariant& variant)
 
     if constexpr (std::is_same_v<T, bool>)              return value ? "true" : "false";
     else if constexpr (std::is_arithmetic_v<T>)         return std::to_string(value);
-    else if constexpr (std::is_same_v<T, std::string>)  return value;
+    else if constexpr (std::is_same_v<T, LazyString>)   return std::string{value.c_str()};
     return std::string{};
   }, variant);
 }
@@ -441,7 +441,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
     }
 
     if constexpr (std::is_same_v<T, std::string>) {
-      return std::move(value);
+      return LazyString{value.c_str()};
     }
 
     return emptyVariant;

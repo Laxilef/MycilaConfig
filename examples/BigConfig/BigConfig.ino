@@ -57,7 +57,7 @@ void setup() {
   config.begin();
 
   // tests
-  assertEquals(config.get<std::string>("some_key").c_str(), "some_value");
+  assertEquals(config.get<Mycila::LazyString>("some_key"), "some_value");
   assertEquals(config.get("some_key", "another"), "some_value");
   assertEquals(config.get<uint16_t>("amount_dynamic_keys"), (uint16_t) 0);
 
@@ -69,15 +69,16 @@ void setup() {
   i = 0;
   for (const auto& key : dynamicKeys) {
     // test
-    assertEquals(config.get<std::string>(key.c_str()), "foo " + std::to_string(i));
+    assertEquals(config.get<Mycila::LazyString>(key.c_str()), "foo " + std::to_string(i));
 
     // set key to new value
     assert(config.set(key.c_str(), "baz"));
-    assertEquals(config.get<std::string>(key.c_str()), "baz");
+    assertEquals(config.get<Mycila::LazyString>(key.c_str()), "baz");
 
     i++;
     delay(10);
   }
+  dynamicKeys.clear();
 
   config.set("amount_dynamic_keys", i);
 

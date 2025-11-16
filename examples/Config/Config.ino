@@ -63,7 +63,7 @@ void setup() {
 
   // tests
   assertEquals(config.get<bool>("key1", true), false);
-  assertEquals(config.get<std::string>("key2", "not_empty").c_str(), "");
+  assertEquals(config.get<Mycila::LazyString>("key2", "not_empty"), "");
   assertEquals(config.get("key3", "abcd"), "");
 
   // check exists key
@@ -94,7 +94,7 @@ void setup() {
   assert(!config.set("key1", true));
 
   // cache stored key
-  assertEquals(config.get<std::string>("key4"), "bar"); // load key and cache
+  assertEquals(config.get<Mycila::LazyString>("key4"), "bar"); // load key and cache
 
   // set key to same value => no change
   assert(config.set("key4", "bar") == Mycila::Config::Result::ALREADY_PERSISTED);
@@ -130,7 +130,7 @@ void setup() {
       Serial.printf("(validator) '%s' => '%s'\n", key, config.toString(newValue).c_str());
     }
 
-    return std::holds_alternative<std::string>(newValue) && std::get<std::string>(newValue) == "baz";
+    return std::holds_alternative<Mycila::LazyString>(newValue) && std::get<Mycila::LazyString>(newValue) == "baz";
     //return newValue == (Mycila::ValueVariant)"baz";
   }));
 
@@ -167,7 +167,7 @@ void setup() {
 
   assertEquals(config.get("key6"), "6");
   config.set("key6", std::to_string(7));
-  assertEquals(config.get<std::string>("key6"), "7");
+  assertEquals(config.get<Mycila::LazyString>("key6"), "7");
 }
 
 void loop() {

@@ -71,7 +71,7 @@ namespace Mycila {
       virtual ~WrappedConfig() { flush(); };
 
       // Add a new configuration key with its default value
-      void configure(const char* key, ValueVariant defaultValue = std::string{});
+      void configure(const char* key, ValueVariant defaultValue = LazyString{});
 
       // starts the config system
       void begin(const char* name = "CONFIG");
@@ -104,11 +104,21 @@ namespace Mycila {
       template <typename T>
       const T& get(const char* key, const T& defaultValue = T{}) const {
         const auto& variant = get(key);
-        if (variant == emptyVariant || !std::holds_alternative<T>(variant)) {
+        if (variant == emptyVariant) {
           return defaultValue;
         }
 
-        return std::get<T>(variant);
+        /*if constexpr (std::is_same_v<T, const char*> && std::holds_alternative<LazyString>(variant)) {
+          return std::get<LazyString>(variant).c_str();
+
+        } else*/ if constexpr (std::is_same_v<T, std::string> && std::holds_alternative<LazyString>(variant)) {
+          return std::string{std::get<LazyString>(variant).c_str()};
+
+        } else if (std::holds_alternative<T>(variant)) {
+          return std::get<T>(variant);
+        }
+
+        return defaultValue;
       }
 
       bool isEqual(const char* key, const ValueVariant& value) const;

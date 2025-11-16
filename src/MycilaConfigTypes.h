@@ -8,6 +8,8 @@
 #include <variant>
 #include <string>
 
+#include "MycilaLazyString.h"
+
 namespace Mycila {
   using ValueVariant = std::variant<
     std::monostate, // as null
@@ -17,7 +19,7 @@ namespace Mycila {
     int32_t, uint32_t,
     int64_t, uint64_t,
     int, float, double,
-    std::string
+    LazyString
   >;
 
   const ValueVariant emptyVariant{};
