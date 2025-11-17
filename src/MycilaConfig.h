@@ -71,19 +71,28 @@ namespace Mycila {
       virtual ~WrappedConfig() { flush(); };
 
       // Add a new configuration key with its default value
-      void configure(const char* key, ValueVariant defaultValue = LazyString{});
+      template <typename T = ValueVariant>
+      Mycila::WrappedConfig& configure(const char* key, T defaultValue = T{}) {
+        assert(!_began);
+
+        _keys.push_back(key);
+        _defaults[key] = std::move(defaultValue);
+        ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config Key '%s' defaults to '%s'", key, toString(_defaults[key]).c_str());
+
+        return *this;
+      }
 
       // starts the config system
-      void begin(const char* name = "CONFIG");
+      Mycila::WrappedConfig& begin(const char* name = "CONFIG");
 
       // Write config if necessary
       bool flush() { return _storage->flush(); }
 
       // register a callback to be called when a config value changes
-      void listen(ConfigChangeCallback callback) { _changeCallback = std::move(callback); }
+      Mycila::WrappedConfig& listen(ConfigChangeCallback callback) { _changeCallback = std::move(callback); return *this; }
 
       // register a callback to be called when the configuration is restored
-      void listen(ConfigRestoredCallback callback) { _restoreCallback = std::move(callback); }
+      Mycila::WrappedConfig& listen(ConfigRestoredCallback callback) { _restoreCallback = std::move(callback); return *this; }
 
       // register a global callback to be called before a config value changes. You can pass a null callback to remove an existing one
       bool setValidator(ConfigValidatorCallback callback);

@@ -6,7 +6,7 @@
 
 #include <assert.h>
 
-void Mycila::WrappedConfig::begin(const char* name) {
+Mycila::WrappedConfig& Mycila::WrappedConfig::begin(const char* name) {
   assert(!_began);
 
   ESP_LOGI(MYCILA_CONFIG_LOG_TAG, "Initializing Config System: %s...", name);
@@ -36,6 +36,8 @@ void Mycila::WrappedConfig::begin(const char* name) {
       ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "begin(): loaded '%s' = '%s'", key, toString(_cache[key]).c_str());
     }
   }
+
+  return *this;
 }
 
 bool Mycila::WrappedConfig::setValidator(ConfigValidatorCallback callback) {
@@ -79,14 +81,6 @@ bool Mycila::WrappedConfig::exists(const char* key) const {
   );
 
   return it != _keys.end() && strcmp(*it, key) == 0;
-}
-
-void Mycila::WrappedConfig::configure(const char* key, ValueVariant defaultValue) {
-  assert(!_began);
-
-  _keys.push_back(key);
-  _defaults[key] = std::move(defaultValue);
-  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config Key '%s' defaults to '%s'", key, toString(_defaults[key]).c_str());
 }
 
 const Mycila::ValueVariant& Mycila::WrappedConfig::get(const char* key) const {
@@ -440,7 +434,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
       }
     }
 
-    if constexpr (std::is_same_v<T, std::string>) {
+    if constexpr (std::is_same_v<T, LazyString>) {
       return LazyString{value.c_str()};
     }
 

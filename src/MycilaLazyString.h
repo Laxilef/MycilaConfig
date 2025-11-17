@@ -63,7 +63,7 @@ namespace Mycila {
       LazyString(const String& value) : LazyString(value.c_str()) {}
 
       LazyString(String&& value) : LazyString(value.c_str()) {
-        value = "";
+        value.clear();
       }
 
       LazyString(const LazyString& other) {
