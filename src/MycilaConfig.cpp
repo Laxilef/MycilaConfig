@@ -402,6 +402,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
       }
     }
 
+#if MYCILA_CONFIG_USE_LONG_LONG
     if constexpr (std::is_same_v<T, int64_t>) {
       char* endPtr;
       auto val = strtoll(value.c_str(), &endPtr, 10);
@@ -417,6 +418,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return static_cast<T>(val);
       }
     }
+#endif
 
     if constexpr (std::is_same_v<T, float>) {
       char* endPtr;
@@ -426,6 +428,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
       }
     }
 
+#if MYCILA_CONFIG_USE_DOUBLE
     if constexpr (std::is_same_v<T, double>) {
       char* endPtr;
       auto val = strtod(value.c_str(), &endPtr);
@@ -433,6 +436,7 @@ Mycila::ValueVariant Mycila::WrappedConfig::toVariant(const std::string& value, 
         return static_cast<T>(val);
       }
     }
+#endif
 
     if constexpr (std::is_same_v<T, LazyString>) {
       return LazyString{value.c_str()};

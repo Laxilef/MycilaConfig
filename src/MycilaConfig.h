@@ -28,6 +28,14 @@
 #define MYCILA_CONFIG_VERSION_REVISION 1
 #define MYCILA_CONFIG_LOG_TAG          "CONFIG"
 
+#ifndef MYCILA_CONFIG_USE_LONG_LONG
+  #define MYCILA_CONFIG_USE_LONG_LONG 1
+#endif
+
+#ifndef MYCILA_CONFIG_USE_DOUBLE
+  #define MYCILA_CONFIG_USE_DOUBLE 1
+#endif
+
 // suffix to use for a setting key enabling a feature
 #ifndef MYCILA_CONFIG_KEY_ENABLE_SUFFIX
   #define MYCILA_CONFIG_KEY_ENABLE_SUFFIX "_enable"
@@ -67,7 +75,10 @@ namespace Mycila {
           Result _result;
       };
 
-      WrappedConfig(std::shared_ptr<Storage> storage) : _storage(std::move(storage)) {}
+      WrappedConfig(std::shared_ptr<Storage> storage, uint16_t reserve = 10) : _storage(std::move(storage)) {
+        _keys.reserve(reserve);
+      }
+
       virtual ~WrappedConfig() { flush(); };
 
       // Add a new configuration key with its default value

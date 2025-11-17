@@ -17,8 +17,13 @@ namespace Mycila {
     int8_t, uint8_t,
     int16_t, uint16_t,
     int32_t, uint32_t,
+#if MYCILA_CONFIG_USE_LONG_LONG
     int64_t, uint64_t,
-    int, float, double,
+#endif
+    int, float,
+#if MYCILA_CONFIG_USE_DOUBLE
+    double,
+#endif
     LazyString
   >;
 

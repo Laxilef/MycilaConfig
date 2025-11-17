@@ -5,7 +5,7 @@
 #include <MycilaConfig.h>
 #include <Storage/MycilaPreferencesStorage.h>
 
-Mycila::WrappedConfig config(std::make_shared<Mycila::PreferencesStorage>());
+Mycila::WrappedConfig config(std::make_shared<Mycila::PreferencesStorage>(), 150);
 
 unsigned long lastHeapLog = 0;
 unsigned long operationCount = 0;

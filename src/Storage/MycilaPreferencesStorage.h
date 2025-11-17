@@ -44,11 +44,15 @@ namespace Mycila {
           else if constexpr (std::is_same_v<T, uint16_t>)     return _prefs.putUShort(key, v);
           else if constexpr (std::is_same_v<T, int32_t>)      return _prefs.putInt(key, v);
           else if constexpr (std::is_same_v<T, uint32_t>)     return _prefs.putUInt(key, v);
+#if MYCILA_CONFIG_USE_LONG_LONG
           else if constexpr (std::is_same_v<T, int64_t>)      return _prefs.putLong64(key, v);
           else if constexpr (std::is_same_v<T, uint64_t>)     return _prefs.putULong64(key, v);
+#endif
           else if constexpr (std::is_same_v<T, int>)          return _prefs.putInt(key, v);
           else if constexpr (std::is_same_v<T, float>)        return _prefs.putFloat(key, v);
+#if MYCILA_CONFIG_USE_DOUBLE
           else if constexpr (std::is_same_v<T, double>)       return _prefs.putDouble(key, v);
+#endif
           else if constexpr (std::is_same_v<T, LazyString>)   return _prefs.putString(key, v.c_str()) == v.size();
           return false;
         }, value);
@@ -68,11 +72,15 @@ namespace Mycila {
           else if constexpr (std::is_same_v<T, uint16_t>)     return _prefs.getUShort(key, static_cast<unsigned short>(def));
           else if constexpr (std::is_same_v<T, int32_t>)      return _prefs.getInt(key, def);
           else if constexpr (std::is_same_v<T, uint32_t>)     return _prefs.getUInt(key, def);
+#if MYCILA_CONFIG_USE_LONG_LONG
           else if constexpr (std::is_same_v<T, int64_t>)      return _prefs.getLong64(key, def);
           else if constexpr (std::is_same_v<T, uint64_t>)     return _prefs.getULong64(key, def);
+#endif
           else if constexpr (std::is_same_v<T, int>)          return static_cast<int>(_prefs.getInt(key, def));
           else if constexpr (std::is_same_v<T, float>)        return _prefs.getFloat(key, def);
+#if MYCILA_CONFIG_USE_DOUBLE
           else if constexpr (std::is_same_v<T, double>)       return _prefs.getDouble(key, def);
+#endif
           else if constexpr (std::is_same_v<T, LazyString>)   return LazyString{_prefs.getString(key, def.c_str())};
 
           return emptyVariant;
