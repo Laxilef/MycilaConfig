@@ -1,12 +1,12 @@
 #include <ArduinoJson.h>
-#include <MycilaConfig.h>
+#include <WrappedConfig.h>
 #include <StreamString.h>
 
 #define KEY_DEBUG_ENABLE "debug_enable"
 #define KEY_WIFI_SSID "wifi_ssid"
 #define KEY_WIFI_PWD "wifi_pwd"
 
-Mycila::WrappedConfig config(std::make_shared<Mycila::PreferencesStorage>());
+WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::Preferences>());
 
 uint8_t getLogLevel() {
   return config.get<bool>(KEY_DEBUG_ENABLE) ? ARDUHAL_LOG_LEVEL_DEBUG : ARDUHAL_LOG_LEVEL_INFO;

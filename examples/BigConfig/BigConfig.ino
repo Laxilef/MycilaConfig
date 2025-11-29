@@ -1,10 +1,9 @@
-#include <MycilaConfig.h>
-#include <Storage/MycilaLittleFSStorage.h>
+#include <WrappedConfig.h>
 
-Mycila::WrappedConfig config(std::make_shared<Mycila::LittleFSStorage>());
+WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::LittleFS>());
 std::vector<std::string> dynamicKeys;
 
-static void assertEquals(const Mycila::ValueVariant& actual, const Mycila::ValueVariant& expected) {
+static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {
   if (actual != expected) {
     Serial.printf("Expected '%s' but got '%s'\n", config.toString(expected).c_str(), config.toString(actual).c_str());
     assert(false);
@@ -33,7 +32,7 @@ void setup() {
   auto startTime = millis();
 
   // listeners
-  config.listen([](const char* key, const Mycila::ValueVariant& newValue) {
+  config.listen([](const char* key, const WrappedConfig::Value& newValue) {
     Serial.printf("(listen) '%s' => '%s'\n", key, config.toString(newValue).c_str());
   });
   config.listen([]() {
@@ -57,7 +56,7 @@ void setup() {
   config.begin();
 
   // tests
-  assertEquals(config.get<Mycila::LazyString>("some_key"), "some_value");
+  assertEquals(config.get<WrappedConfig::LazyString>("some_key"), "some_value");
   assertEquals(config.get("some_key", "another"), "some_value");
   assertEquals(config.get<uint16_t>("amount_dynamic_keys"), (uint16_t) 0);
 
@@ -69,11 +68,11 @@ void setup() {
   i = 0;
   for (const auto& key : dynamicKeys) {
     // test
-    assertEquals(config.get<Mycila::LazyString>(key.c_str()), "foo " + std::to_string(i));
+    assertEquals(config.get<WrappedConfig::LazyString>(key.c_str()), "foo " + std::to_string(i));
 
     // set key to new value
     assert(config.set(key.c_str(), "baz"));
-    assertEquals(config.get<Mycila::LazyString>(key.c_str()), "baz");
+    assertEquals(config.get<WrappedConfig::LazyString>(key.c_str()), "baz");
 
     i++;
     delay(10);
