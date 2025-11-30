@@ -18,12 +18,12 @@ namespace WrappedConfig {
         }
 
         virtual bool exists(const char* key) override {
-          auto* item = _wrapper->getItem(key);
-          if (item == nullptr) {
+          auto* pItem = _wrapper->getItem(key);
+          if (pItem == nullptr) {
             return false;
           }
 
-          return item->hasValue();
+          return pItem->hasValue();
         }
 
         virtual bool unset(const char* key) override {
@@ -31,21 +31,21 @@ namespace WrappedConfig {
         }
 
         virtual bool set(const char* key, const Value& variant) override {
-          auto* item = _wrapper->getItem(key);
-          if (item == nullptr) {
+          auto* pItem = _wrapper->getItem(key);
+          if (pItem == nullptr) {
             return false;
           }
 
-          return !item->hasValue() || item->getValue() != variant;
+          return !pItem->hasValue() || pItem->getValue() != variant;
         }
 
         virtual Value get(const char* key, const Value& defaultValue) const override {
-          auto* item = _wrapper->getItem(key);
-          if (item == nullptr) {
+          auto* pItem = _wrapper->getItem(key);
+          if (pItem == nullptr) {
             return Value::null();
           }
 
-          return item->getValue();
+          return pItem->getValue();
         }
 
       private:

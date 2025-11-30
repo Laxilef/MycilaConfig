@@ -8,10 +8,10 @@ WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::Fil
 static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {
   if (actual != expected) {
     if (actual.isNull()) {
-      Serial.printf("Expected '%s' but got NULL\n", expected.toString().data());
+      Serial.printf("Expected '%s' but got NULL\n", expected.toString().c_str());
 
     } else {
-      Serial.printf("Expected '%s' but got '%s'\n", expected.toString().data(), actual.toString().data());
+      Serial.printf("Expected '%s' but got '%s'\n", expected.toString().c_str(), actual.toString().c_str());
     }
 
     assert(false);
@@ -53,7 +53,7 @@ void setup() {
       Serial.printf("(listen) '%s' => NULL\n", key);
 
     } else {
-      Serial.printf("(listen) '%s' => '%s'\n", key, newValue.toString().data());
+      Serial.printf("(listen) '%s' => '%s'\n", key, newValue.toString().c_str());
     }
   });
 
@@ -86,7 +86,7 @@ void setup() {
       Serial.printf("(global validator) '%s' => NULL\n", key);
 
     } else {
-      Serial.printf("(global validator) '%s' => '%s'\n", key, newValue.toString().data());
+      Serial.printf("(global validator) '%s' => '%s'\n", key, newValue.toString().c_str());
     }
 
     return true;
@@ -135,7 +135,7 @@ void setup() {
       Serial.printf("(validator) '%s' => NULL\n", key);
 
     } else {
-      Serial.printf("(validator) '%s' => '%s'\n", key, newValue.toString().data());
+      Serial.printf("(validator) '%s' => '%s'\n", key, newValue.toString().c_str());
     }
 
     return newValue == "baz";

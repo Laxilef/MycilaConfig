@@ -179,7 +179,7 @@ void setup() {
         .configure("auth_pwd2", "user123");
 
   printHeap("After configure()");
-  
+
   config.begin("BIGCONFIG");
 
   printHeap("After begin()");
@@ -187,19 +187,19 @@ void setup() {
   // Register a change listener
   // listeners
   config.listen([](const char* key, const WrappedConfig::Value& newValue) {
-    Serial.printf("[CHANGE] %s = %s\n", key, newValue.toString().data());
+    Serial.printf("[CHANGE] %s = %s\n", key, newValue.toString().c_str());
   });
 
   Serial.println("\n=== Configuration Complete ===");
-  Serial.printf("Total keys configured: %d\n", config.keys().size());
+  Serial.printf("Total keys configured: %d\n", config.items().size());
   Serial.println("Starting random operations...\n");
 
   lastHeapLog = millis();
 }
 
 void loop() {
-  // Log heap every 2 seconds
-  if (millis() - lastHeapLog >= 2000) {
+  // Log heap every 10 seconds
+  if (millis() - lastHeapLog >= 10000) {
     printHeap("Loop");
     Serial.printf("Operations completed: %lu\n\n", operationCount);
     lastHeapLog = millis();
@@ -213,7 +213,7 @@ void loop() {
     const auto& keys = config.items();
     const char* key = keys.at(random(0, keys.size())).getKey();
     auto value = config.get(key);
-    Serial.printf("[GET] %s = %s\n", key, value.toString().data());
+    Serial.printf("[GET] %s = %s\n", key, value.toString().c_str());
 
   } else if (op < 70) {
     // 30% chance: SET operation

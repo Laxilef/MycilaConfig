@@ -126,7 +126,7 @@ namespace WrappedConfig {
       bool empty() const {
         return !_buffer || *_buffer == '\0';
       }
-      
+
       // LazyString vs LazyString
       //
       friend bool operator==(const LazyString& lhs, const LazyString& rhs) {

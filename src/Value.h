@@ -268,7 +268,7 @@ namespace WrappedConfig {
           using T = std::decay_t<decltype(def)>;
           return Value::fromString<T>(value);
         }, defaultValue);
-        
+
         return !variant.isNull() ? variant : defaultValue;
       }
   };

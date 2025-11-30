@@ -47,8 +47,8 @@ bool WrappedConfig::WrappedConfig::setValidator(ConfigValidatorCallback callback
 
 bool WrappedConfig::WrappedConfig::setValidator(const char* key, ConfigValidatorCallback callback) {
   // find item
-  auto* item = getItem(key);
-  if (item == nullptr) {
+  auto* pItem = getItem(key);
+  if (pItem == nullptr) {
     ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "setValidator(%s): Unknown key!", key);
     return false;
   }
@@ -56,7 +56,7 @@ bool WrappedConfig::WrappedConfig::setValidator(const char* key, ConfigValidator
   auto it = std::find_if(
     _validators.begin(), _validators.end(),
     [&](const auto& p) {
-      return p.first == item->getKey();
+      return p.first == pItem->getKey();
     }
   );
 
@@ -64,17 +64,17 @@ bool WrappedConfig::WrappedConfig::setValidator(const char* key, ConfigValidator
     if (it != _validators.end()) {
       it->second = std::move(callback);
     } else {
-      _validators.emplace_back(item->getKey(), std::move(callback));
+      _validators.emplace_back(pItem->getKey(), std::move(callback));
     }
 
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, callback)", item->getKey());
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, callback)", pItem->getKey());
 
   } else {
     if (it != _validators.end()) {
       _validators.erase(it);
     }
 
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, nullptr)", item->getKey());
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, nullptr)", pItem->getKey());
   }
 
   return true;
@@ -139,41 +139,41 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::set(const char* key, V
   assert(_began);
 
   // find item
-  auto* item = getItem(key);
-  if (item == nullptr) {
+  auto* pItem = getItem(key);
+  if (pItem == nullptr) {
     ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "set(%s): UNKNOWN_KEY", key);
     return Status::UNKNOWN_KEY;
   }
 
   // check if the type valid
-  if (variant.index() != item->getDefaultValue().index()) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_TYPE", item->getKey());
+  if (variant.index() != pItem->getDefaultValue().index()) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_TYPE", pItem->getKey());
     return Status::INVALID_TYPE;
   }
 
   // check if the value is the same as the default
-  if (variant == item->getDefaultValue()) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): SAME_AS_DEFAULT", item->getKey());
+  if (variant == pItem->getDefaultValue()) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): SAME_AS_DEFAULT", pItem->getKey());
 
-    if (_storage->exists(item->getKey())) {
-      _storage->unset(item->getKey());
+    if (_storage->exists(pItem->getKey())) {
+      _storage->unset(pItem->getKey());
     }
 
-    item->clearValue();
+    pItem->clearValue();
 
     return Status::SAME_AS_DEFAULT;
   }
 
   // check if the value is the same as the current
-  if (item->hasValue() && variant == item->getValue()) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): SAME_AS_PERSISTED", item->getKey());
+  if (pItem->hasValue() && variant == pItem->getValue()) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): SAME_AS_PERSISTED", pItem->getKey());
     return Status::SAME_AS_PERSISTED;
   }
 
   // check if we have a global validator
   // and check if the value is valid
-  if (_globalValidatorCallback && !_globalValidatorCallback(item->getKey(), variant)) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", item->getKey());
+  if (_globalValidatorCallback && !_globalValidatorCallback(pItem->getKey(), variant)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pItem->getKey());
     return Status::INVALID_VALUE;
   }
 
@@ -183,25 +183,25 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::set(const char* key, V
     _validators.begin(),
     _validators.end(),
     [&](const auto& p) {
-      return p.first == item->getKey();
+      return p.first == pItem->getKey();
     }
   );
-  if (vit != _validators.end() && !vit->second(item->getKey(), variant)) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", item->getKey());
+  if (vit != _validators.end() && !vit->second(pItem->getKey(), variant)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pItem->getKey());
     return Status::INVALID_VALUE;
   }
 
   // update failed ?
-  if (!_storage->set(item->getKey(), variant)) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): FAIL_ON_WRITE", item->getKey());
+  if (!_storage->set(pItem->getKey(), variant)) {
+    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): FAIL_ON_WRITE", pItem->getKey());
     return Status::FAIL_ON_WRITE;
   }
 
-  item->setValue(variant);
-  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): PERSISTED", item->getKey());
+  pItem->setValue(variant);
+  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): PERSISTED", pItem->getKey());
 
   if (fireChangeCallback && _changeCallback) {
-    _changeCallback(item->getKey(), item->getValue());
+    _changeCallback(pItem->getKey(), pItem->getValue());
   }
 
   return Status::PERSISTED;
@@ -235,27 +235,27 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::unset(const char* key,
   assert(_began);
 
   // find item
-  auto* item = getItem(key);
-  if (item == nullptr) {
+  auto* pItem = getItem(key);
+  if (pItem == nullptr) {
     ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "unset(%s): UNKNOWN_KEY", key);
     return Status::UNKNOWN_KEY;
   }
 
   // key not removed
-  if (!_storage->unset(item->getKey())) {
-    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "unset(%s): FAIL_ON_REMOVE", item->getKey());
+  if (!_storage->unset(pItem->getKey())) {
+    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "unset(%s): FAIL_ON_REMOVE", pItem->getKey());
     return Status::FAIL_ON_REMOVE;
   }
 
   // remove from cache
-  if (item->hasValue()) {
-    item->clearValue();
+  if (pItem->hasValue()) {
+    pItem->clearValue();
   }
 
-  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "unset(%s) REMOVED", item->getKey());
+  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "unset(%s) REMOVED", pItem->getKey());
 
   if (fireChangeCallback && _changeCallback) {
-    _changeCallback(item->getKey(), item->getValue());
+    _changeCallback(pItem->getKey(), pItem->getValue());
   }
 
   return Status::REMOVED;
@@ -268,7 +268,7 @@ void WrappedConfig::WrappedConfig::backup(Print& out) {
     const auto& variant = get(item.getKey());
     out.print(item.getKey());
     out.print('=');
-    out.print(variant.toString().data());
+    out.print(variant.toString().c_str());
     out.print("\n");
   }
 }
@@ -408,78 +408,3 @@ void WrappedConfig::WrappedConfig::toJson(JsonObject root) {
   }
 }
 #endif
-
-const WrappedConfig::Value& WrappedConfig::WrappedConfig::_findValue(const std::vector<ValuePair>& source, const char* key) const {
-  auto it = std::find_if(
-    source.begin(), source.end(),
-    [key](const auto& p) {
-      return p.first == key;
-    }
-  );
-
-  return it != source.end() ? it->second : Value::null();
-}
-
-WrappedConfig::Value& WrappedConfig::WrappedConfig::_upsertValue(std::vector<ValuePair>& target, const char* key, const Value& value) {
-  auto it = std::find_if(
-    target.begin(), target.end(),
-    [key](const auto& p) {
-      return p.first == key;
-    }
-  );
-
-  if (it != target.end()) {
-    it->second = std::move(value);
-    return it->second;
-
-  } else {
-    return target.emplace_back(key, std::move(value)).second;
-  }
-}
-
-void WrappedConfig::WrappedConfig::_eraseValue(std::vector<ValuePair>& target, const char* key) {
-  auto it = std::find_if(target.begin(), target.end(), [key](const auto& p) { return p.first == key; });
-  if (it != target.end()) {
-    target.erase(it);
-  }
-}
-
-const WrappedConfig::ConfigValidatorCallback* WrappedConfig::WrappedConfig::_findValidator(const char* key) const {
-  auto it = std::find_if(
-    _validators.begin(), _validators.end(),
-    [key](const auto& p) {
-      return p.first == key;
-    }
-  );
-
-  return it != _validators.end() ? &(it->second) : nullptr;
-}
-
-void WrappedConfig::WrappedConfig::_upsertValidator(const char* key, ConfigValidatorCallback callback) {
-  auto it = std::find_if(
-    _validators.begin(), _validators.end(),
-    [key](const auto& p) {
-      return p.first == key;
-    }
-  );
-
-  if (it != _validators.end()) {
-    it->second = std::move(callback);
-
-  } else if (callback) {
-    _validators.emplace_back(key, std::move(callback));
-  }
-}
-
-void WrappedConfig::WrappedConfig::_eraseValidator(const char* key) {
-  auto it = std::find_if(
-    _validators.begin(), _validators.end(),
-    [key](const auto& p) {
-      return p.first == key;
-    }
-  );
-
-  if (it != _validators.end()) {
-    _validators.erase(it);
-  }
-}
