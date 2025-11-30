@@ -5,6 +5,7 @@
 #include <FS.h>
 
 #include "Base.h"
+#include "Utils.h"
 
 namespace WrappedConfig {
   namespace Storage {
@@ -24,34 +25,50 @@ namespace WrappedConfig {
           _wrapper = wrapper;
         }
 
-        std::map<const char*, std::string> load() override {
+        size_t preload() override {
           auto file = _fs->open(_filename.c_str(), "r");
           if (!file) {
-            return {};
+            return 0;
           }
 
-          char buf[256];
-          std::map<const char*, std::string> result;
+          char buffer[256];
           while (file.available()) {
-            size_t len = file.readBytesUntil('\n', buf, sizeof(buf) - 1);
-            if (len == 0) {
+            size_t length = file.readBytesUntil('\n', buffer, sizeof(buffer) - 1);
+            if (length == 0) {
               continue;
             }
 
-            buf[len] = '\0';
-            const char* parsedKey;
-            std::string parsedVal;
-            if (_parseLine(buf, parsedKey, parsedVal)) {
-              auto* item = _wrapper->getItem(parsedKey);
-              
-              if (item != nullptr) {
-                result.emplace(item->getKey(), parsedVal);
-                _persisted.insert(item->getKey());
-              }
+            buffer[length] = '\0';
+            auto parsedKey = parseKey(buffer);
+            if (parsedKey.empty()) {
+              continue;
             }
+
+            auto parsedKeyStr = std::string{parsedKey};
+            auto* pItem = _wrapper->getItem(parsedKeyStr.c_str());
+            parsedKeyStr.clear();
+
+            if (pItem == nullptr) {
+              continue;
+            }
+
+            auto parsedValueStr = std::string{parseValue(buffer)};
+            auto variant = std::visit([&](auto&& def) -> Value {
+              using T = std::decay_t<decltype(def)>;
+              return Value::fromString<T>(parsedValueStr.c_str());
+            }, pItem->getDefaultValue());
+            parsedValueStr.clear();
+
+            if (variant.isNull()) {
+              continue;
+            }
+
+            pItem->setValue(variant);
+            _persisted.insert(pItem->getKey());
           }
           file.close();
-          return result;
+
+          return _persisted.size();
         }
 
         bool clear() override {
@@ -62,58 +79,58 @@ namespace WrappedConfig {
         }
 
         bool exists(const char* key) override {
-          auto* item = _wrapper->getItem(key);
-          if (item == nullptr) {
+          auto* pItem = _wrapper->getItem(key);
+          if (pItem == nullptr) {
             return false;
           }
 
-          if (_pending.count(item->getKey())) {
-            return item->hasValue();
+          if (_pending.count(pItem->getKey())) {
+            return pItem->hasValue();
           }
 
-          return _persisted.count(item->getKey());
+          return _persisted.count(pItem->getKey());
         }
 
         bool unset(const char* key) override {
-          auto* item = _wrapper->getItem(key);
-          if (item == nullptr) {
+          auto* pItem = _wrapper->getItem(key);
+          if (pItem == nullptr) {
             return false;
           }
 
-          if (!item->hasValue()) {
+          if (!pItem->hasValue()) {
             return false;
           }
 
-          _pending.insert(item->getKey());
+          _pending.insert(pItem->getKey());
           _dirty = true;
           _lastChange = millis();
           return true;
         }
 
         bool set(const char* key, const Value& value) override {
-          auto* item = _wrapper->getItem(key);
-          if (item == nullptr) {
+          auto* pItem = _wrapper->getItem(key);
+          if (pItem == nullptr) {
             return false;
           }
 
-          _pending.insert(item->getKey());
+          _pending.insert(pItem->getKey());
           _dirty = true;
           _lastChange = millis();
           return true;
         }
 
         Value get(const char* key, const Value& defaultValue) const override {
-          auto* item = _wrapper->getItem(key);
-          if (item == nullptr) {
+          auto* pItem = _wrapper->getItem(key);
+          if (pItem == nullptr) {
             return Value::null();
           }
 
-          if (_pending.count(item->getKey())) {
-            if (!item->hasValue()) {
+          if (_pending.count(pItem->getKey())) {
+            if (!pItem->hasValue()) {
               return Value::null();
             }
 
-            return item->getValue();
+            return pItem->getValue();
           }
 
           auto file = _fs->open(_filename.c_str(), "r");
@@ -121,25 +138,28 @@ namespace WrappedConfig {
             return Value::null();
           }
 
-          char buf[256];
+          char buffer[256];
           while (file.available()) {
-            size_t length = file.readBytesUntil('\n', buf, sizeof(buf) - 1);
+            size_t length = file.readBytesUntil('\n', buffer, sizeof(buffer) - 1);
             if (length == 0) {
               continue;
             }
-            buf[length] = '\0';
 
-            const char* parsedKey;
-            std::string parsedVal;
-            if (_parseLine(buf, parsedKey, parsedVal) && strcmp(parsedKey, item->getKey()) == 0) {
-              file.close();
-              
-              return std::visit([&](auto&& def) -> Value {
-                using T = std::decay_t<decltype(def)>;
-                return Value::fromString<T>(parsedVal.c_str());
-              }, item->getDefaultValue());
+            buffer[length] = '\0';
+            auto parsedKey = parseKey(buffer);
+            if (parsedKey.empty() || parsedKey != pItem->getKey()) {
+              continue;
             }
+
+            const auto parsedValueStr = std::string{parseValue(buffer)};
+            file.close();
+
+            return std::visit([&](auto&& def) -> Value {
+              using T = std::decay_t<decltype(def)>;
+              return Value::fromString<T>(parsedValueStr.c_str());
+            }, pItem->getDefaultValue());
           }
+
           file.close();
           return Value::null();
         }
@@ -150,13 +170,13 @@ namespace WrappedConfig {
           }
 
           for (const char* key : _pending) {
-            auto* item = _wrapper->getItem(key);
+            auto* pItem = _wrapper->getItem(key);
 
-            if (item && item->hasValue()) {
-              _persisted.insert(item->getKey());
+            if (pItem && pItem->hasValue()) {
+              _persisted.insert(pItem->getKey());
 
             } else {
-              _persisted.erase(item->getKey());
+              _persisted.erase(pItem->getKey());
             }
           }
           _pending.clear();
@@ -169,10 +189,10 @@ namespace WrappedConfig {
           }
 
           for (const char* key : _persisted) {
-            auto* item = _wrapper->getItem(key);
-            if (item && item->hasValue()) {
-              auto value = item->getValue().toString();
-              out.printf("%s=%s\n", item->getKey(), value.data());
+            auto* pItem = _wrapper->getItem(key);
+            if (pItem && pItem->hasValue()) {
+              auto value = pItem->getValue().toString();
+              out.printf("%s=%s\n", pItem->getKey(), value.data());
             }
           }
 
@@ -195,45 +215,6 @@ namespace WrappedConfig {
         bool _dirty = false;
         unsigned long _lastChange = 0;
         unsigned long _flushDelay = 0;
-
-        bool _parseLine(char* buf, const char*& outKey, std::string& outVal) const {
-          if (buf[strlen(buf) - 1] == '\r') {
-            buf[strlen(buf) - 1] = '\0';
-          }
-
-          char* eq = strchr(buf, '=');
-          if (!eq || eq == buf) {
-            return false;
-          }
-
-          *eq = '\0';
-          char* keyPtr = buf;
-          char* valPtr = eq + 1;
-
-          // trim key
-          while (*keyPtr == ' ' || *keyPtr == '\t') {
-            ++keyPtr;
-          }
-
-          // trim val
-          while (*valPtr == ' ' || *valPtr == '\t') {
-            ++valPtr;
-          }
-
-          char* end = valPtr + strlen(valPtr);
-          while (end > valPtr && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r')) {
-            --end;
-          }
-          *end = '\0';
-
-          if (*keyPtr == '\0' || *valPtr == '\0') {
-            return false;
-          }
-
-          outKey = keyPtr;
-          outVal = valPtr;
-          return true;
-        }
     };
   }
 } // namespace WrappedConfig

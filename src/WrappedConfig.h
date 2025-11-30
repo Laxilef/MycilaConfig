@@ -14,7 +14,7 @@
 
 #include <Print.h>
 
-#ifdef MYCILA_JSON_SUPPORT
+#ifdef WRAPPED_CONFIG_JSON_SUPPORT
   #include <ArduinoJson.h>
 #endif
 
@@ -61,6 +61,7 @@
 #endif
 
 #include "WrappedConfigTypes.h"
+#include "Utils.h"
 #include "Storage/Base.h"
 
 namespace WrappedConfig {
@@ -80,7 +81,7 @@ namespace WrappedConfig {
         assert(!_began);
 
         const Item& item = _items.emplace_back(key, std::move(defaultValue));
-        ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config Key '%s' defaults to '%s'", key, item.getDefaultValue().toString().data());
+        ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config Key '%s' defaults to '%s'", key, item.getDefaultValue().toString().c_str());
 
         return *this;
       }
@@ -114,49 +115,10 @@ namespace WrappedConfig {
       // returns false if the key is not found
       bool exists(const char* key) const;
 
-      Item* getItem(const char* key) const {
-        auto it = std::lower_bound(
-          _items.begin(), _items.end(), key,
-          [](const Item& item, const char* str) {
-            return strcmp(item.getKey(), str) < 0;
-          }
-        );
-
-        return (it != _items.end() && (it->getKey() == key || strcmp(it->getKey(), key) == 0)) 
-          ? &(*it) 
-          : nullptr;
-      }
+      Item* getItem(const char* key) const;
 
       // get the value variant of a setting key
-      const Value& get(const char* key) {
-        assert(_began);
-
-        // find item
-        auto* item = getItem(key);
-        if (item == nullptr) {
-          ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "get(%s): Unknown key!", key);
-          return Value::null();
-        }
-
-        // check if we have a cached value
-        if (item->hasValue()) {
-          return item->getValue();
-        }
-
-        // key in storage exists ?
-        if (_storage->exists(item->getKey())) {
-          auto variant = _storage->get(item->getKey(), item->getDefaultValue());
-
-          if (!variant.isNull()) {
-            item->setValue(variant);
-            ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "get(%s): Key cached", item->getKey());
-            return item->getValue();
-          }
-        }
-
-        // key does not exist, or not assigned to a value
-        return item->getDefaultValue();
-      }
+      const Value& get(const char* key);
 
       // get the value or default of a setting key
       template <typename T>
@@ -188,26 +150,7 @@ namespace WrappedConfig {
         return _items;
       }
 
-      // get list of keys
-      std::vector<const char*> keys() const {
-        std::vector<const char*> k;
-        k.reserve(_items.size());
-        for(const auto& i : _items) k.push_back(i.getKey());
-        return k;
-      }
-
-      // get cached values
-      std::map<const char*, const Value&> cache() const {
-        std::map<const char*, const Value&> cache;
-        for(const auto& item : _items) {
-          if (item.hasValue()) {
-            //cache[item.getKey()] = item.getValue(); // @TODO fix
-          }
-        }
-        return cache;
-      }
-
-#ifdef MYCILA_JSON_SUPPORT
+#ifdef WRAPPED_CONFIG_JSON_SUPPORT
       bool toJson(JsonObject root, const char* key);
       void toJson(JsonObject root);
 #endif
@@ -220,13 +163,5 @@ namespace WrappedConfig {
       ConfigValidatorCallback _globalValidatorCallback = nullptr;
       mutable std::vector<Item> _items;
       mutable std::vector<ValidatorPair> _validators;
-
-      const Value& _findValue(const std::vector<ValuePair>& source, const char* key) const;
-      Value& _upsertValue(std::vector<ValuePair>& target, const char* key, const Value& value);
-      void _eraseValue(std::vector<ValuePair>& target, const char* key);
-
-      const ConfigValidatorCallback* _findValidator(const char* key) const;
-      void _upsertValidator(const char* key, ConfigValidatorCallback callback);
-      void _eraseValidator(const char* key);
   };
 } // namespace WrappedConfig

@@ -28,27 +28,8 @@ WrappedConfig::WrappedConfig& WrappedConfig::WrappedConfig::begin(const char* na
   _began = true;
 
   // load from storage
-  for(auto& [key, value] : _storage->load()) {
-    ESP_LOGI(MYCILA_CONFIG_LOG_TAG, "FS KEY %s=%s", key, value.c_str());
-
-    auto* item = getItem(key);
-    if (item == nullptr) {
-      ESP_LOGI(MYCILA_CONFIG_LOG_TAG, "FS NO KEY FOR %s", key);
-      continue;
-    }
-
-    auto variant = std::visit([&](auto&& def) -> Value {
-      using T = std::decay_t<decltype(def)>;
-      return Value::fromString<T>(value.c_str());
-    }, item->getDefaultValue());
-
-    if (!variant.isNull()) {
-      item->setValue(variant);
-      ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "begin(): loaded '%s' = '%s'", item->getKey(), item->getValue().toString().data());
-    } else {
-      ESP_LOGI(MYCILA_CONFIG_LOG_TAG, "FS NO VARIANT FOR %s", key);
-    }
-  }
+  auto preloaded = _storage->preload();
+  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "begin(): preloaded %zu items", preloaded);
 
   return *this;
 }
@@ -103,6 +84,49 @@ bool WrappedConfig::WrappedConfig::exists(const char* key) const {
   assert(_began);
 
   return getItem(key) != nullptr;
+}
+
+WrappedConfig::Item* WrappedConfig::WrappedConfig::getItem(const char* key) const {
+  auto it = std::lower_bound(
+    _items.begin(), _items.end(), key,
+    [](const Item& item, const char* str) {
+      return strcmp(item.getKey(), str) < 0;
+    }
+  );
+
+  return (it != _items.end() && (it->getKey() == key || strcmp(it->getKey(), key) == 0))
+    ? &(*it)
+    : nullptr;
+}
+
+const WrappedConfig::Value& WrappedConfig::WrappedConfig::get(const char* key) {
+  assert(_began);
+
+  // find item
+  auto* pItem = getItem(key);
+  if (pItem == nullptr) {
+    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "get(%s): Unknown key!", key);
+    return Value::null();
+  }
+
+  // check if we have a cached value
+  if (pItem->hasValue()) {
+    return pItem->getValue();
+  }
+
+  // key in storage exists ?
+  if (_storage->exists(pItem->getKey())) {
+    auto variant = _storage->get(pItem->getKey(), pItem->getDefaultValue());
+
+    if (!variant.isNull()) {
+      pItem->setValue(variant);
+      ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "get(%s): Key cached", pItem->getKey());
+      return pItem->getValue();
+    }
+  }
+
+  // key does not exist, or not assigned to a value
+  return pItem->getDefaultValue();
 }
 
 bool WrappedConfig::WrappedConfig::isEqual(const char* key, const Value& variant) {
@@ -253,37 +277,65 @@ bool WrappedConfig::WrappedConfig::restore(const char* data) {
   assert(_began);
 
   std::map<const char*, Value> settings;
-  for (auto& item : _items) {
-    auto key = item.getKey();
-    char* start = strstr(data, key);
-    if (start) {
-      start += strlen(key);
-      if (*start != '=') {
-        continue;
-      }
 
-      start++;
-      char* end = strchr(start, '\r');
-      if (!end) {
-        end = strchr(start, '\n');
-      }
+  char buffer[256];
+  const char* pData = data;
+  while (*pData != '\0') {
+    const char* pLineEnd = strchr(pData, '\n');
+    if (pLineEnd == nullptr) {
+      pLineEnd = pData + strlen(pData);
+    }
 
-      if (!end) {
-        ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "restore(%s): Invalid data!", key);
-        return false;
-      }
+    size_t lineLength = pLineEnd - pData;
+    if (lineLength == 0) {
+      pData = pLineEnd + 1;
+      continue;
+    }
 
-      std::string val(start, end - start);
-      auto variant = std::visit([&](auto&& def) -> Value {
-        using T = std::decay_t<decltype(def)>;
-        return Value::fromString<T>(val.c_str());
-      }, item.getDefaultValue());
+    if (lineLength >= sizeof(buffer) - 1) {
+      ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "restore(...): Line too long, skipping");
+      pData = pLineEnd + 1;
+      continue;
+    }
 
-      if (!variant.isNull()) {
-        settings[key] = variant;
-      }
+    strncpy(buffer, pData, lineLength);
+    buffer[lineLength] = '\0';
+
+    auto parsedKey = parseKey(buffer);
+    if (parsedKey.empty()) {
+      pData = pLineEnd + 1;
+      continue;
+    }
+
+    auto parsedKeyStr = std::string{parsedKey};
+    auto* pItem = getItem(parsedKeyStr.c_str());
+    parsedKeyStr.clear();
+
+    if (pItem == nullptr) {
+      pData = pLineEnd + 1;
+      continue;
+    }
+
+    auto parsedValueStr = std::string{parseValue(buffer)};
+    auto variant = std::visit([&](auto&& def) -> Value {
+      using T = std::decay_t<decltype(def)>;
+      return Value::fromString<T>(parsedValueStr.c_str());
+    }, pItem->getDefaultValue());
+    parsedValueStr.clear();
+
+    if (variant.isNull()) {
+      pData = pLineEnd + 1;
+      continue;
+    }
+
+    settings[pItem->getKey()] = variant;
+
+    pData = pLineEnd;
+    while (*pData == '\n' || *pData == '\r') {
+      pData++;
     }
   }
+
   return restore(settings);
 }
 
@@ -292,12 +344,17 @@ bool WrappedConfig::WrappedConfig::restore(const std::map<const char*, Value>& s
 
   ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Restoring %d settings...", settings.size());
   bool restored = set(settings, false);
+
   if (restored) {
     ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config restored");
-    if (_restoreCallback)
+    if (_restoreCallback) {
       _restoreCallback();
-  } else
+    }
+
+  } else {
     ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "No change detected");
+  }
+
   return restored;
 }
 
@@ -313,9 +370,15 @@ void WrappedConfig::WrappedConfig::clear() {
   }
 }
 
-#ifdef MYCILA_JSON_SUPPORT
+#ifdef WRAPPED_CONFIG_JSON_SUPPORT
 bool WrappedConfig::WrappedConfig::toJson(JsonObject root, const char* key) {
   assert(_began);
+
+  // find item
+  auto* pItem = getItem(key);
+  if (pItem == nullptr) {
+    return false;
+  }
 
   return std::visit([&](auto&& value) -> bool {
     using T = std::decay_t<decltype(value)>;
@@ -326,7 +389,7 @@ bool WrappedConfig::WrappedConfig::toJson(JsonObject root, const char* key) {
 
     } else if constexpr (std::is_same_v<T, LazyString>) {
 #ifdef WRAPPED_CONFIG_PASSWORD_MASK
-      root[key] = !isPasswordKey(key) ? value.c_str() : WRAPPED_CONFIG_PASSWORD_MASK;
+      root[key] = pItem->isPassword() ? value.c_str() : WRAPPED_CONFIG_PASSWORD_MASK;
 #else
       root[key] = value.c_str();
 #endif
@@ -334,7 +397,7 @@ bool WrappedConfig::WrappedConfig::toJson(JsonObject root, const char* key) {
     }
 
     return false;
-  }, get(key));
+  }, pItem->hasValue() ? pItem->getValue() : get(key));
 }
 
 void WrappedConfig::WrappedConfig::toJson(JsonObject root) {
