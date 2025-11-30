@@ -44,7 +44,7 @@ To enable `toJson()` method with ArduinoJson:
 
 ```ini
 build_flags =
-  -D MYCILA_JSON_SUPPORT
+  -D WRAPPED_CONFIG_JSON_SUPPORT
 lib_deps =
   mathieucarbou/MycilaConfig
   bblanchon/ArduinoJson
@@ -65,7 +65,7 @@ void setup() {
 
   // Declare configuration keys with optional default values
   // Key names must be ≤ 15 characters
-  config.configure("debug_enable", MYCILA_CONFIG_VALUE_FALSE);
+  config.configure("debug_enable", WRAPPED_CONFIG_VALUE_FALSE);
   config.configure("wifi_ssid");
   config.configure("wifi_pwd");
   config.configure("port", "80");
@@ -119,7 +119,7 @@ void setup() {
   if (config.isEmpty("wifi_pwd")) {
     Serial.println("Password not set");
   }
-  if (config.isEqual("debug_enable", MYCILA_CONFIG_VALUE_TRUE)) {
+  if (config.isEqual("debug_enable", WRAPPED_CONFIG_VALUE_TRUE)) {
     Serial.println("Debug mode enabled");
   }
 }
@@ -155,8 +155,8 @@ void loop() {}
 
 - **`bool getBool(const char* key) const`**  
   Parse value as boolean:
-  - If `-D MYCILA_CONFIG_EXTENDED_BOOL_VALUE_PARSING=1` (or not defined): (`MYCILA_CONFIG_VALUE_TRUE`, `"true"`, `"1"`, `"on"`, `"yes"`) → `true`. **This is the default behavior.**
-  - If `-D MYCILA_CONFIG_EXTENDED_BOOL_VALUE_PARSING=0`: only `MYCILA_CONFIG_VALUE_TRUE` → `true`
+  - If `-D WRAPPED_CONFIG_EXTENDED_BOOL_VALUE_PARSING=1` (or not defined): (`WRAPPED_CONFIG_VALUE_TRUE`, `"true"`, `"1"`, `"on"`, `"yes"`) → `true`. **This is the default behavior.**
+  - If `-D WRAPPED_CONFIG_EXTENDED_BOOL_VALUE_PARSING=0`: only `WRAPPED_CONFIG_VALUE_TRUE` → `true`
 
 - **`int getInt(const char* key) const`**  
   Parse value as integer using `std::stoi()`.
@@ -183,8 +183,8 @@ void loop() {}
   Set multiple values at once. Returns true if any value was changed.
 
 - **`bool setBool(const char* key, bool value)`**  
-  Set a boolean value (stored as `MYCILA_CONFIG_VALUE_TRUE` or `MYCILA_CONFIG_VALUE_FALSE`).
-  Eg., `MYCILA_CONFIG_VALUE_TRUE` = "true", `MYCILA_CONFIG_VALUE_FALSE` = "false" (by default).
+  Set a boolean value (stored as `WRAPPED_CONFIG_VALUE_TRUE` or `WRAPPED_CONFIG_VALUE_FALSE`).
+  Eg., `WRAPPED_CONFIG_VALUE_TRUE` = "true", `WRAPPED_CONFIG_VALUE_FALSE` = "false" (by default).
 
 - **`bool unset(const char* key, bool fireChangeCallback = true)`**  
   Remove the persisted value (revert to default).
@@ -197,7 +197,7 @@ void loop() {}
 
 **Result codes:**
 - `PERSISTED` — Value written to NVS successfully
-- `ALREADY_PERSISTED` — Value already matches what's stored (no-op)
+- `SAME_AS_PERSISTED` — Value already matches what's stored (no-op)
 - `SAME_AS_DEFAULT` — Value matches default and key not persisted (no-op)
 - `INVALID_VALUE` — Rejected by validator
 - `UNKNOWN_KEY` — Key not registered via `configure()`
@@ -265,12 +265,12 @@ if (!res) {
 - **`bool isEnableKey(const char* key) const`**  
   Returns true if key ends with `_enable`.
 
-- **`void toJson(const JsonObject& root)`** *(requires `MYCILA_JSON_SUPPORT`)*  
+- **`void toJson(const JsonObject& root)`** *(requires `WRAPPED_CONFIG_JSON_SUPPORT`)*  
   Export all configuration to an ArduinoJson object. Password keys are masked.
 
 ## JSON Export and Password Masking
 
-When `MYCILA_JSON_SUPPORT` is defined, you can export configuration to JSON:
+When `WRAPPED_CONFIG_JSON_SUPPORT` is defined, you can export configuration to JSON:
 
 ```cpp
 #include <ArduinoJson.h>
@@ -280,11 +280,11 @@ config.toJson(doc.to<JsonObject>());
 serializeJson(doc, Serial);
 ```
 
-Keys ending with `_pwd` are automatically masked in the JSON output (unless you define `MYCILA_CONFIG_SHOW_PASSWORD`).
+Keys ending with `_pwd` are automatically masked in the JSON output (unless you define `WRAPPED_CONFIG_SHOW_PASSWORD`).
 
 **Customize the mask:**
 ```cpp
-#define MYCILA_CONFIG_PASSWORD_MASK "****"  // default is "********"
+#define WRAPPED_CONFIG_PASSWORD_MASK "****"  // default is "********"
 ```
 
 ## Backup and Restore Example
