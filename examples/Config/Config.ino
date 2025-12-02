@@ -7,10 +7,10 @@ Preferences prefs;
 static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {
   if (actual != expected) {
     if (actual.isNull()) {
-      Serial.printf("Expected '%s' but got NULL\n", expected.toString().c_str());
+      Serial.printf("Expected '%s' but got NULL\n", expected.as<const char*>());
 
     } else {
-      Serial.printf("Expected '%s' but got '%s'\n", expected.toString().c_str(), actual.toString().c_str());
+      Serial.printf("Expected '%s' but got '%s'\n", expected.as<const char*>(), actual.as<const char*>());
     }
 
     assert(false);
@@ -46,7 +46,7 @@ void setup() {
       Serial.printf("(listen) '%s' => NULL\n", key);
 
     } else {
-      Serial.printf("(listen) '%s' => '%s'\n", key, newValue.toString().c_str());
+      Serial.printf("(listen) '%s' => '%s'\n", key, newValue.as<const char*>());
     }
   });
 
@@ -80,7 +80,7 @@ void setup() {
       Serial.printf("(global validator) '%s' => NULL\n", key);
 
     } else {
-      Serial.printf("(global validator) '%s' => '%s'\n", key, newValue.toString().c_str());
+      Serial.printf("(global validator) '%s' => '%s'\n", key, newValue.as<const char*>());
     }
 
     return true;
@@ -96,7 +96,11 @@ void setup() {
 
   // set key to same value => no change
   assert(config.set("key1", true) == WrappedConfig::Status::SAME_AS_PERSISTED);
+  assert(config.get("key1").as<int>() == 1);
+  assert(config.set("key1", false));
+  assert(config.get("key1").as<uint8_t>() == 0);
   assert(config.set("key1", true));
+  assertEquals(config.get<std::string>("key1"), "true");
 
   // cache stored key
   assertEquals(config.get<WrappedConfig::LazyString>("key4"), "bar"); // load key and cache
@@ -132,7 +136,7 @@ void setup() {
       Serial.printf("(validator) '%s' => NULL\n", key);
 
     } else {
-      Serial.printf("(validator) '%s' => '%s'\n", key, newValue.toString().c_str());
+      Serial.printf("(validator) '%s' => '%s'\n", key, newValue.as<const char*>());
     }
 
     return newValue == "baz";
@@ -172,6 +176,7 @@ void setup() {
   assertEquals(config.get<const char*>("key6"), "6");
   config.set("key6", std::to_string(7));
   assertEquals(config.get<WrappedConfig::LazyString>("key6"), "7");
+  assert(config.get<int16_t>("key6") == 7);
 }
 
 void loop() {

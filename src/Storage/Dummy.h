@@ -5,10 +5,6 @@ namespace WrappedConfig {
   namespace Storage {
     class Dummy : public Base {
       public:
-        bool begin(const char* name) override {
-          return true;
-        }
-
         void setWrapper(WrappedConfig* wrapper) override {
           _wrapper = wrapper;
         }
@@ -17,7 +13,7 @@ namespace WrappedConfig {
           return true;
         }
 
-        virtual bool exists(const char* key) override {
+        virtual bool exists(const char* key) const override {
           auto* pItem = _wrapper->getItem(key);
           if (pItem == nullptr) {
             return false;

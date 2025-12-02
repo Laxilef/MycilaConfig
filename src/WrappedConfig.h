@@ -60,8 +60,7 @@
   #endif
 #endif
 
-#include "WrappedConfigTypes.h"
-#include "Utils.h"
+#include "Types.h"
 #include "Storage/Base.h"
 
 namespace WrappedConfig {
@@ -81,7 +80,10 @@ namespace WrappedConfig {
         assert(!_began);
 
         const Item& item = _items.emplace_back(key, std::move(defaultValue));
-        ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config Key '%s' defaults to '%s'", key, item.getDefaultValue().toString().c_str());
+        ESP_LOGD(
+          MYCILA_CONFIG_LOG_TAG, "Config Key '%s' defaults to '%s'",
+          key, item.getDefaultValue().as<const char*>()
+        );
 
         return *this;
       }

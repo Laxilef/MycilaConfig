@@ -1,18 +1,30 @@
-#include <WrappedConfig.h>
+#include <LittleFS.h>
 
-WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::LittleFS>());
+#include <WrappedConfig.h>
+#include <Storage/FileSystem.h>
+
+WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::FileSystem>(&LittleFS));
 std::vector<std::string> dynamicKeys;
 
 static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {
   if (actual != expected) {
-    Serial.printf("Expected '%s' but got '%s'\n", config.toString(expected).c_str(), config.toString(actual).c_str());
+    if (actual.isNull()) {
+      Serial.printf("Expected '%s' but got NULL\n", expected.as<const char*>());
+
+    } else {
+      Serial.printf("Expected '%s' but got '%s'\n", expected.as<const char*>(), actual.as<const char*>());
+    }
+
     assert(false);
   }
 }
 
 static void assertEquals(const char* actual, const char* expected) {
-  if (strcmp(actual, expected) != 0) {
-    Serial.printf("Expected '%s' but got '%s'\n", expected, actual);
+  auto _actual = actual != nullptr ? actual : "";
+  auto _expected = expected != nullptr ? expected : "";
+
+  if (strcmp(_actual, _expected) != 0) {
+    Serial.printf("Expected '%s' but got '%s'\n", _expected, _actual);
     assert(false);
   }
 }
@@ -33,8 +45,14 @@ void setup() {
 
   // listeners
   config.listen([](const char* key, const WrappedConfig::Value& newValue) {
-    Serial.printf("(listen) '%s' => '%s'\n", key, config.toString(newValue).c_str());
+    if (newValue.isNull()) {
+      Serial.printf("(listen) '%s' => NULL\n", key);
+
+    } else {
+      Serial.printf("(listen) '%s' => '%s'\n", key, newValue.as<const char*>());
+    }
   });
+
   config.listen([]() {
     Serial.println("(restored)");
   });

@@ -78,7 +78,7 @@ namespace WrappedConfig {
           return _fs->remove(_filename.c_str());
         }
 
-        bool exists(const char* key) override {
+        bool exists(const char* key) const override {
           auto* pItem = _wrapper->getItem(key);
           if (pItem == nullptr) {
             return false;
@@ -191,8 +191,13 @@ namespace WrappedConfig {
           for (const char* key : _persisted) {
             auto* pItem = _wrapper->getItem(key);
             if (pItem && pItem->hasValue()) {
-              auto value = pItem->getValue().toString();
-              out.printf("%s=%s\n", pItem->getKey(), value.data());
+              // key
+              out.print(pItem->getKey());
+              out.print('=');
+              
+              // value
+              out.print(pItem->getValue().as<const char*>());
+              out.print('\n');
             }
           }
 

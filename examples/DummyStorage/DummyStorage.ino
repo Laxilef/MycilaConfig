@@ -6,10 +6,10 @@ WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::Dum
 static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {
   if (actual != expected) {
     if (actual.isNull()) {
-      Serial.printf("Expected '%s' but got NULL\n", expected.toString().c_str());
+      Serial.printf("Expected '%s' but got NULL\n", expected.as<const char*>());
 
     } else {
-      Serial.printf("Expected '%s' but got '%s'\n", expected.toString().c_str(), actual.toString().c_str());
+      Serial.printf("Expected '%s' but got '%s'\n", expected.as<const char*>(), actual.as<const char*>());
     }
 
     assert(false);
@@ -38,7 +38,7 @@ void setup() {
       Serial.printf("(listen) '%s' => NULL\n", key);
 
     } else {
-      Serial.printf("(listen) '%s' => '%s'\n", key, newValue.toString().c_str());
+      Serial.printf("(listen) '%s' => '%s'\n", key, newValue.as<const char*>());
     }
   });
 

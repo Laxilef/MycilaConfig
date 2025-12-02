@@ -187,7 +187,7 @@ void setup() {
   // Register a change listener
   // listeners
   config.listen([](const char* key, const WrappedConfig::Value& newValue) {
-    Serial.printf("[CHANGE] %s = %s\n", key, newValue.toString().c_str());
+    Serial.printf("[CHANGE] %s = %s\n", key, newValue.as<const char*>());
   });
 
   Serial.println("\n=== Configuration Complete ===");
@@ -213,7 +213,7 @@ void loop() {
     const auto& keys = config.items();
     const char* key = keys.at(random(0, keys.size())).getKey();
     auto value = config.get(key);
-    Serial.printf("[GET] %s = %s\n", key, value.toString().c_str());
+    Serial.printf("[GET] %s = %s\n", key, value.as<const char*>());
 
   } else if (op < 70) {
     // 30% chance: SET operation

@@ -19,7 +19,7 @@ namespace WrappedConfig {
           return _prefs.clear();
         }
 
-        virtual bool exists(const char* key) override {
+        virtual bool exists(const char* key) const override {
           return _prefs.isKey(key);
         }
 

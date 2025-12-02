@@ -35,7 +35,8 @@ namespace WrappedConfig {
         }
       }
 
-      LazyString(const std::string& value) : LazyString(value.c_str()) {}
+      explicit LazyString(const std::string_view& view) : LazyString(view.data()) {}
+      explicit LazyString(const std::string& value) : LazyString(value.c_str()) {}
 
       LazyString(std::string&& value) : LazyString(value.c_str()) {
         value.clear();
@@ -267,7 +268,7 @@ namespace WrappedConfig {
         return !(lhs < rhs);
       }
 
-      // LazyString vs String
+      // LazyString vs Arduino String
       //
       friend bool operator==(const LazyString& lhs, const String& rhs) {
         return lhs == rhs.c_str();
@@ -293,7 +294,7 @@ namespace WrappedConfig {
         return !(lhs < rhs);
       }
 
-      // String vs LazyString
+      // Arduino String vs LazyString
       //
       friend bool operator==(const String& lhs, const LazyString& rhs) {
         return rhs == lhs;

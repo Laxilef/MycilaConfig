@@ -3,6 +3,7 @@
  * Copyright (C) 2023-2025 Mathieu Carbou
  */
 #include "WrappedConfig.h"
+#include "Utils.h"
 
 #include <assert.h>
 
@@ -268,7 +269,7 @@ void WrappedConfig::WrappedConfig::backup(Print& out) {
     const auto& variant = get(item.getKey());
     out.print(item.getKey());
     out.print('=');
-    out.print(variant.toString().c_str());
+    out.print(variant.as<const char*>());
     out.print("\n");
   }
 }

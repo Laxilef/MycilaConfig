@@ -16,7 +16,6 @@ namespace WrappedConfig {
   typedef std::function<void()> ConfigRestoredCallback;
   typedef std::function<bool(const char* key, const Value& newValue)> ConfigValidatorCallback;
 
-  using ValuePair = std::pair<const char*, Value>;
   using ValidatorPair = std::pair<const char*, ConfigValidatorCallback>;
 
   enum class Status {
@@ -104,11 +103,6 @@ namespace WrappedConfig {
         return _value;
       }
 
-      /*Item& setValue(Value&& value) {
-        _value = std::move(value);
-        return *this;
-      }*/
-
       Item& setValue(const Value& value) {
         _value = std::move(value);
         return *this;
@@ -123,4 +117,4 @@ namespace WrappedConfig {
       Value _defaultValue;
       Value _value;
   };
-} // namespace WrappedConfig
+}
