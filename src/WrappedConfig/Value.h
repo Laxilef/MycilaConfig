@@ -105,7 +105,8 @@ namespace WrappedConfig {
 
           } else if constexpr (std::is_arithmetic_v<ValueType>) {
             // Dangerous! Use only if you understand what you are doing.
-            thread_local auto tmp = std::to_string(value);
+            thread_local std::string tmp;
+            tmp = std::to_string(value);
             return tmp.c_str();
 
           } else if constexpr (std::same_as<ValueType, LazyString>) {
