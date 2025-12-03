@@ -65,7 +65,7 @@ namespace WrappedConfig {
               continue;
             }
 
-            pItem->setValue(variant);
+            pItem->setValue(std::move(variant));
             _persisted.insert(pItem->getKey());
           }
           file.close();

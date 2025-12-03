@@ -125,7 +125,7 @@ const WrappedConfig::Value& WrappedConfig::Config::get(const char* key) {
     auto variant = _storage.get(pItem->getKey(), pItem->getDefaultValue());
 
     if (!variant.isNull()) {
-      pItem->setValue(variant);
+      pItem->setValue(std::move(variant));
       ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "get(%s): Key cached", pItem->getKey());
       return pItem->getValue();
     }
@@ -203,7 +203,7 @@ const WrappedConfig::Result WrappedConfig::Config::set(const char* key, Value va
     return Status::FAIL_ON_WRITE;
   }
 
-  pItem->setValue(variant);
+  pItem->setValue(std::move(variant));
   ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): PERSISTED", pItem->getKey());
 
   if (fireChangeCallback && _changeCallback) {

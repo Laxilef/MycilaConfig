@@ -53,6 +53,11 @@ namespace WrappedConfig {
       }
 
       Item& setValue(const Value& value) {
+        _value = value;
+        return *this;
+      }
+
+      Item& setValue(Value&& value) {
         _value = std::move(value);
         return *this;
       }
