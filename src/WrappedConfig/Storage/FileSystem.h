@@ -13,13 +13,15 @@ namespace WrappedConfig {
   namespace Storage {
     class FileSystem : public Base {
       public:
-        FileSystem(::FS* fs, uint32_t flushDelay = 5000) : _fs(fs), _flushDelay(flushDelay) {}
+        FileSystem(FS* fs, uint32_t flushDelay = 5000) : _fs(fs), _flushDelay(flushDelay) {}
 
         bool begin(const char* name) override {
+          _filename.clear();
           _filename.reserve(4 + strlen(name));
           _filename += '/';
           _filename += name;
           _filename += ".cfg";
+
           return true;
         }
 
@@ -171,50 +173,67 @@ namespace WrappedConfig {
             return false;
           }
 
-          for (const char* key : _pending) {
-            auto* pItem = _wrapper->getItem(key);
-
-            if (pItem && pItem->hasValue()) {
-              _persisted.insert(pItem->getKey());
-
-            } else {
-              _persisted.erase(pItem->getKey());
-            }
-          }
-          _pending.clear();
-
-          std::string tmp = _filename + ".tmp";
-          auto out = _fs->open(tmp.c_str(), "w");
-          if (!out) {
+          std::string tmpFilename = _filename + ".tmp";
+          auto tmpFile = _fs->open(tmpFilename.c_str(), "w");
+          if (!tmpFile) {
             ESP_LOGE(WRAPPED_CONFIG_LOG_TAG, "Failed to open temp file");
+
+            _lastChange = millis();
             return false;
           }
 
-          for (const char* key : _persisted) {
+          auto persisted = _persisted;
+          for (const char* key : _pending) {
             auto* pItem = _wrapper->getItem(key);
-            if (pItem && pItem->hasValue()) {
-              // key
-              out.print(pItem->getKey());
-              out.print('=');
-              
-              // value
-              out.print(pItem->getValue().as<const char*>());
-              out.print('\n');
+
+            if (pItem) {
+              if (pItem->hasValue()) {
+                persisted.insert(pItem->getKey());
+
+              } else {
+                persisted.erase(pItem->getKey());
+              }
             }
           }
 
-          out.close();
-          _fs->remove(_filename.c_str());
-          if (!_fs->rename(tmp.c_str(), _filename.c_str())) {
-            ESP_LOGE(WRAPPED_CONFIG_LOG_TAG, "Failed to rename temp file");
+          for (const char* key : persisted) {
+            auto* pItem = _wrapper->getItem(key);
+
+            if (pItem && pItem->hasValue()) {
+              // key
+              tmpFile.print(pItem->getKey());
+              tmpFile.print('=');
+
+              // value
+              tmpFile.print(pItem->getValue().as<const char*>());
+              tmpFile.print('\n');
+            }
           }
+          tmpFile.close();
+
+          if (_fs->exists(_filename.c_str()) && !_fs->remove(_filename.c_str())) {
+            ESP_LOGE(WRAPPED_CONFIG_LOG_TAG, "Failed to remove old file");
+            _fs->remove(tmpFilename.c_str());
+            _lastChange = millis();
+            return false;
+          }
+
+          if (!_fs->rename(tmpFilename.c_str(), _filename.c_str())) {
+            ESP_LOGE(WRAPPED_CONFIG_LOG_TAG, "Failed to rename temp file");
+            _fs->remove(tmpFilename.c_str());
+            _lastChange = millis();
+            return false;
+          }
+
+          _pending.clear();
+          _persisted = std::move(persisted);
           _dirty = false;
 
           return true;
         }
 
       private:
-        ::FS* _fs = nullptr;
+        FS* _fs = nullptr;
         std::string _filename;
         Config* _wrapper = nullptr;
         std::set<const char*> _pending;
