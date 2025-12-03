@@ -1,5 +1,7 @@
 #pragma once
+
 #include <Preferences.h>
+
 #include "Base.h"
 
 namespace WrappedConfig {
@@ -137,4 +139,4 @@ namespace WrappedConfig {
         mutable ::Preferences _prefs;
     };
   }
-} // namespace WrappedConfig
+}

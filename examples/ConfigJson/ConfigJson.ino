@@ -1,12 +1,14 @@
 #include <ArduinoJson.h>
 #include <WrappedConfig.h>
+#include <WrappedConfig/Storage/Preferences.h>
 #include <StreamString.h>
 
 #define KEY_DEBUG_ENABLE "debug_enable"
 #define KEY_WIFI_SSID "wifi_ssid"
 #define KEY_WIFI_PWD "wifi_pwd"
 
-WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::Preferences>());
+auto configStorage = WrappedConfig::Storage::Preferences();
+auto config = WrappedConfig::Config(configStorage);
 
 uint8_t getLogLevel() {
   return config.get<bool>(KEY_DEBUG_ENABLE) ? ARDUHAL_LOG_LEVEL_DEBUG : ARDUHAL_LOG_LEVEL_INFO;
@@ -14,8 +16,9 @@ uint8_t getLogLevel() {
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial)
+  while (!Serial) {
     continue;
+  }
 
   config.configure(KEY_DEBUG_ENABLE, false);
   config.configure(KEY_WIFI_SSID, "My_wifi");

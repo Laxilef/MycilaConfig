@@ -1,7 +1,8 @@
 #include <WrappedConfig.h>
-#include <Storage/Preferences.h>
+#include <WrappedConfig/Storage/Preferences.h>
 
-WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::Preferences>());
+auto configStorage = WrappedConfig::Storage::Preferences();
+auto config = WrappedConfig::Config(configStorage);
 Preferences prefs;
 
 static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {

@@ -3,6 +3,9 @@
 #include <string>
 #include <type_traits>
 #include <variant>
+#include <limits>
+
+#include "LazyString.h"
 
 namespace WrappedConfig {
   using ValueVariant = std::variant<
@@ -23,7 +26,6 @@ namespace WrappedConfig {
 
   class Value : public ValueVariant {
     public:
-      // Inherit all constructors from std::variant
       using ValueVariant::ValueVariant;
       using ValueVariant::operator=;
       using ValueVariant::index;
@@ -187,7 +189,7 @@ namespace WrappedConfig {
           } else if constexpr (std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> ||
                                std::is_same_v<T, int32_t> || std::is_same_v<T, int>) {
             char* endPtr;
-            auto val = std::strtol(value, &endPtr, 10);
+            auto val = strtol(value, &endPtr, 10);
             if (*endPtr == '\0') {
               return static_cast<T>(val);
             }

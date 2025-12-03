@@ -1,8 +1,9 @@
 #pragma once
-#include "Types.h"
+
+#include "../Types.h"
 
 namespace WrappedConfig {
-  class WrappedConfig;
+  class Config;
 
   namespace Storage {
     class Base {
@@ -20,7 +21,7 @@ namespace WrappedConfig {
           return true;
         }
 
-        virtual void setWrapper(WrappedConfig*) {}
+        virtual void setWrapper(Config*) {}
 
         virtual bool flush() {
           return false;

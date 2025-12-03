@@ -1,16 +1,21 @@
-// SPDX-License-Identifier: MIT
-/*
- * Copyright (C) 2023-2025 Mathieu Carbou
- */
-#include "WrappedConfig.h"
+#include "Config.h"
 #include "Utils.h"
 
 #include <assert.h>
 
-WrappedConfig::WrappedConfig& WrappedConfig::WrappedConfig::begin(const char* name) {
+
+WrappedConfig::Config::Config(Storage::Base& storage, uint16_t reserve) : _storage(storage) {
+  _items.reserve(reserve);
+}
+
+WrappedConfig::Config::~Config() {
+  flush();
+}
+
+WrappedConfig::Config& WrappedConfig::Config::begin(const char* name) {
   assert(!_began);
 
-  ESP_LOGI(MYCILA_CONFIG_LOG_TAG, "Initializing Config System: %s...", name);
+  ESP_LOGI(WRAPPED_CONFIG_LOG_TAG, "Initializing Config System: %s...", name);
 
   // sort items by key
   std::sort(
@@ -24,33 +29,33 @@ WrappedConfig::WrappedConfig& WrappedConfig::WrappedConfig::begin(const char* na
   _validators.shrink_to_fit();
 
   // begin storage
-  assert(_storage->begin(name));
-  _storage->setWrapper(this);
+  assert(_storage.begin(name));
+  _storage.setWrapper(this);
   _began = true;
 
   // load from storage
-  auto preloaded = _storage->preload();
-  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "begin(): preloaded %zu items", preloaded);
+  auto preloaded = _storage.preload();
+  ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "begin(): preloaded %zu items", preloaded);
 
   return *this;
 }
 
-bool WrappedConfig::WrappedConfig::setValidator(ConfigValidatorCallback callback) {
+bool WrappedConfig::Config::setValidator(ConfigValidatorCallback callback) {
   if (callback) {
     _globalValidatorCallback = std::move(callback);
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(callback)");
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "setValidator(callback)");
   } else {
     _globalValidatorCallback = nullptr;
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(nullptr)");
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "setValidator(nullptr)");
   }
   return true;
 }
 
-bool WrappedConfig::WrappedConfig::setValidator(const char* key, ConfigValidatorCallback callback) {
+bool WrappedConfig::Config::setValidator(const char* key, ConfigValidatorCallback callback) {
   // find item
   auto* pItem = getItem(key);
   if (pItem == nullptr) {
-    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "setValidator(%s): Unknown key!", key);
+    ESP_LOGW(WRAPPED_CONFIG_LOG_TAG, "setValidator(%s): Unknown key!", key);
     return false;
   }
 
@@ -68,26 +73,26 @@ bool WrappedConfig::WrappedConfig::setValidator(const char* key, ConfigValidator
       _validators.emplace_back(pItem->getKey(), std::move(callback));
     }
 
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, callback)", pItem->getKey());
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "setValidator(%s, callback)", pItem->getKey());
 
   } else {
     if (it != _validators.end()) {
       _validators.erase(it);
     }
 
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "setValidator(%s, nullptr)", pItem->getKey());
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "setValidator(%s, nullptr)", pItem->getKey());
   }
 
   return true;
 }
 
-bool WrappedConfig::WrappedConfig::exists(const char* key) const {
+bool WrappedConfig::Config::exists(const char* key) const {
   assert(_began);
 
   return getItem(key) != nullptr;
 }
 
-WrappedConfig::Item* WrappedConfig::WrappedConfig::getItem(const char* key) const {
+WrappedConfig::Item* WrappedConfig::Config::getItem(const char* key) const {
   auto it = std::lower_bound(
     _items.begin(), _items.end(), key,
     [](const Item& item, const char* str) {
@@ -100,13 +105,13 @@ WrappedConfig::Item* WrappedConfig::WrappedConfig::getItem(const char* key) cons
     : nullptr;
 }
 
-const WrappedConfig::Value& WrappedConfig::WrappedConfig::get(const char* key) {
+const WrappedConfig::Value& WrappedConfig::Config::get(const char* key) {
   assert(_began);
 
   // find item
   auto* pItem = getItem(key);
   if (pItem == nullptr) {
-    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "get(%s): Unknown key!", key);
+    ESP_LOGW(WRAPPED_CONFIG_LOG_TAG, "get(%s): Unknown key!", key);
     return Value::null();
   }
 
@@ -116,12 +121,12 @@ const WrappedConfig::Value& WrappedConfig::WrappedConfig::get(const char* key) {
   }
 
   // key in storage exists ?
-  if (_storage->exists(pItem->getKey())) {
-    auto variant = _storage->get(pItem->getKey(), pItem->getDefaultValue());
+  if (_storage.exists(pItem->getKey())) {
+    auto variant = _storage.get(pItem->getKey(), pItem->getDefaultValue());
 
     if (!variant.isNull()) {
       pItem->setValue(variant);
-      ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "get(%s): Key cached", pItem->getKey());
+      ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "get(%s): Key cached", pItem->getKey());
       return pItem->getValue();
     }
   }
@@ -130,34 +135,34 @@ const WrappedConfig::Value& WrappedConfig::WrappedConfig::get(const char* key) {
   return pItem->getDefaultValue();
 }
 
-bool WrappedConfig::WrappedConfig::isEqual(const char* key, const Value& variant) {
+bool WrappedConfig::Config::isEqual(const char* key, const Value& variant) {
   assert(_began);
 
   return get(key) == variant;
 }
 
-const WrappedConfig::Result WrappedConfig::WrappedConfig::set(const char* key, Value variant, bool fireChangeCallback) {
+const WrappedConfig::Result WrappedConfig::Config::set(const char* key, Value variant, bool fireChangeCallback) {
   assert(_began);
 
   // find item
   auto* pItem = getItem(key);
   if (pItem == nullptr) {
-    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "set(%s): UNKNOWN_KEY", key);
+    ESP_LOGW(WRAPPED_CONFIG_LOG_TAG, "set(%s): UNKNOWN_KEY", key);
     return Status::UNKNOWN_KEY;
   }
 
   // check if the type valid
   if (variant.index() != pItem->getDefaultValue().index()) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_TYPE", pItem->getKey());
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): INVALID_TYPE", pItem->getKey());
     return Status::INVALID_TYPE;
   }
 
   // check if the value is the same as the default
   if (variant == pItem->getDefaultValue()) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): SAME_AS_DEFAULT", pItem->getKey());
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): SAME_AS_DEFAULT", pItem->getKey());
 
-    if (_storage->exists(pItem->getKey())) {
-      _storage->unset(pItem->getKey());
+    if (_storage.exists(pItem->getKey())) {
+      _storage.unset(pItem->getKey());
     }
 
     pItem->clearValue();
@@ -167,14 +172,14 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::set(const char* key, V
 
   // check if the value is the same as the current
   if (pItem->hasValue() && variant == pItem->getValue()) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): SAME_AS_PERSISTED", pItem->getKey());
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): SAME_AS_PERSISTED", pItem->getKey());
     return Status::SAME_AS_PERSISTED;
   }
 
   // check if we have a global validator
   // and check if the value is valid
   if (_globalValidatorCallback && !_globalValidatorCallback(pItem->getKey(), variant)) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pItem->getKey());
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pItem->getKey());
     return Status::INVALID_VALUE;
   }
 
@@ -188,18 +193,18 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::set(const char* key, V
     }
   );
   if (vit != _validators.end() && !vit->second(pItem->getKey(), variant)) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pItem->getKey());
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): INVALID_VALUE", pItem->getKey());
     return Status::INVALID_VALUE;
   }
 
   // update failed ?
-  if (!_storage->set(pItem->getKey(), variant)) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): FAIL_ON_WRITE", pItem->getKey());
+  if (!_storage.set(pItem->getKey(), variant)) {
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): FAIL_ON_WRITE", pItem->getKey());
     return Status::FAIL_ON_WRITE;
   }
 
   pItem->setValue(variant);
-  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "set(%s): PERSISTED", pItem->getKey());
+  ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "set(%s): PERSISTED", pItem->getKey());
 
   if (fireChangeCallback && _changeCallback) {
     _changeCallback(pItem->getKey(), pItem->getValue());
@@ -208,7 +213,7 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::set(const char* key, V
   return Status::PERSISTED;
 }
 
-bool WrappedConfig::WrappedConfig::set(const std::map<const char*, Value>& settings, bool fireChangeCallback) {
+bool WrappedConfig::Config::set(const std::map<const char*, Value>& settings, bool fireChangeCallback) {
   assert(_began);
 
   bool updates = false;
@@ -232,19 +237,19 @@ bool WrappedConfig::WrappedConfig::set(const std::map<const char*, Value>& setti
   return updates;
 }
 
-const WrappedConfig::Result WrappedConfig::WrappedConfig::unset(const char* key, bool fireChangeCallback) {
+const WrappedConfig::Result WrappedConfig::Config::unset(const char* key, bool fireChangeCallback) {
   assert(_began);
 
   // find item
   auto* pItem = getItem(key);
   if (pItem == nullptr) {
-    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "unset(%s): UNKNOWN_KEY", key);
+    ESP_LOGW(WRAPPED_CONFIG_LOG_TAG, "unset(%s): UNKNOWN_KEY", key);
     return Status::UNKNOWN_KEY;
   }
 
   // key not removed
-  if (!_storage->unset(pItem->getKey())) {
-    ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "unset(%s): FAIL_ON_REMOVE", pItem->getKey());
+  if (!_storage.unset(pItem->getKey())) {
+    ESP_LOGW(WRAPPED_CONFIG_LOG_TAG, "unset(%s): FAIL_ON_REMOVE", pItem->getKey());
     return Status::FAIL_ON_REMOVE;
   }
 
@@ -253,7 +258,7 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::unset(const char* key,
     pItem->clearValue();
   }
 
-  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "unset(%s) REMOVED", pItem->getKey());
+  ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "unset(%s) REMOVED", pItem->getKey());
 
   if (fireChangeCallback && _changeCallback) {
     _changeCallback(pItem->getKey(), pItem->getValue());
@@ -262,7 +267,7 @@ const WrappedConfig::Result WrappedConfig::WrappedConfig::unset(const char* key,
   return Status::REMOVED;
 }
 
-void WrappedConfig::WrappedConfig::backup(Print& out) {
+void WrappedConfig::Config::backup(Print& out) {
   assert(_began);
 
   for (auto& item : _items) {
@@ -274,7 +279,7 @@ void WrappedConfig::WrappedConfig::backup(Print& out) {
   }
 }
 
-bool WrappedConfig::WrappedConfig::restore(const char* data) {
+bool WrappedConfig::Config::restore(const char* data) {
   assert(_began);
 
   std::map<const char*, Value> settings;
@@ -294,7 +299,7 @@ bool WrappedConfig::WrappedConfig::restore(const char* data) {
     }
 
     if (lineLength >= sizeof(buffer) - 1) {
-      ESP_LOGW(MYCILA_CONFIG_LOG_TAG, "restore(...): Line too long, skipping");
+      ESP_LOGW(WRAPPED_CONFIG_LOG_TAG, "restore(...): Line too long, skipping");
       pData = pLineEnd + 1;
       continue;
     }
@@ -340,30 +345,30 @@ bool WrappedConfig::WrappedConfig::restore(const char* data) {
   return restore(settings);
 }
 
-bool WrappedConfig::WrappedConfig::restore(const std::map<const char*, Value>& settings) {
+bool WrappedConfig::Config::restore(const std::map<const char*, Value>& settings) {
   assert(_began);
 
-  ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Restoring %d settings...", settings.size());
+  ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "Restoring %d settings...", settings.size());
   bool restored = set(settings, false);
 
   if (restored) {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "Config restored");
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "Config restored");
     if (_restoreCallback) {
       _restoreCallback();
     }
 
   } else {
-    ESP_LOGD(MYCILA_CONFIG_LOG_TAG, "No change detected");
+    ESP_LOGD(WRAPPED_CONFIG_LOG_TAG, "No change detected");
   }
 
   return restored;
 }
 
-void WrappedConfig::WrappedConfig::clear() {
+void WrappedConfig::Config::clear() {
   assert(_began);
 
   // clear storage
-  _storage->clear();
+  _storage.clear();
 
   // clear all values
   for(auto& item : _items) {
@@ -372,7 +377,7 @@ void WrappedConfig::WrappedConfig::clear() {
 }
 
 #ifdef WRAPPED_CONFIG_JSON_SUPPORT
-bool WrappedConfig::WrappedConfig::toJson(JsonObject root, const char* key) {
+bool WrappedConfig::Config::toJson(JsonObject root, const char* key) {
   assert(_began);
 
   // find item
@@ -401,7 +406,7 @@ bool WrappedConfig::WrappedConfig::toJson(JsonObject root, const char* key) {
   }, pItem->hasValue() ? pItem->getValue() : get(key));
 }
 
-void WrappedConfig::WrappedConfig::toJson(JsonObject root) {
+void WrappedConfig::Config::toJson(JsonObject root) {
   assert(_began);
 
   for (auto& item : _items) {

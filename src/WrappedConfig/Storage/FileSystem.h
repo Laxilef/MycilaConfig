@@ -1,11 +1,13 @@
 #pragma once
 
 #include <set>
+#include <string>
 
+#include <esp_log.h>
 #include <FS.h>
 
 #include "Base.h"
-#include "Utils.h"
+#include "../Utils.h"
 
 namespace WrappedConfig {
   namespace Storage {
@@ -21,7 +23,7 @@ namespace WrappedConfig {
           return true;
         }
 
-        void setWrapper(WrappedConfig* wrapper) override {
+        void setWrapper(Config* wrapper) override {
           _wrapper = wrapper;
         }
 
@@ -184,7 +186,7 @@ namespace WrappedConfig {
           std::string tmp = _filename + ".tmp";
           auto out = _fs->open(tmp.c_str(), "w");
           if (!out) {
-            ESP_LOGE(MYCILA_CONFIG_LOG_TAG, "Failed to open temp file");
+            ESP_LOGE(WRAPPED_CONFIG_LOG_TAG, "Failed to open temp file");
             return false;
           }
 
@@ -204,7 +206,7 @@ namespace WrappedConfig {
           out.close();
           _fs->remove(_filename.c_str());
           if (!_fs->rename(tmp.c_str(), _filename.c_str())) {
-            ESP_LOGE(MYCILA_CONFIG_LOG_TAG, "Failed to rename temp file");
+            ESP_LOGE(WRAPPED_CONFIG_LOG_TAG, "Failed to rename temp file");
           }
           _dirty = false;
 
@@ -214,7 +216,7 @@ namespace WrappedConfig {
       private:
         ::FS* _fs = nullptr;
         std::string _filename;
-        WrappedConfig* _wrapper = nullptr;
+        Config* _wrapper = nullptr;
         std::set<const char*> _pending;
         std::set<const char*> _persisted;
         bool _dirty = false;
@@ -222,4 +224,4 @@ namespace WrappedConfig {
         unsigned long _flushDelay = 0;
     };
   }
-} // namespace WrappedConfig
+}

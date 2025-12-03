@@ -1,7 +1,8 @@
 #include <WrappedConfig.h>
-#include <Storage/Preferences.h>
+#include <WrappedConfig/Storage/Preferences.h>
 
-WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::Preferences>(), 150);
+auto configStorage = WrappedConfig::Storage::Preferences();
+auto config = WrappedConfig::Config(configStorage, 150);
 
 unsigned long lastHeapLog = 0;
 unsigned long operationCount = 0;

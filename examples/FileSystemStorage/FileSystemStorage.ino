@@ -1,9 +1,10 @@
 #include <LittleFS.h>
 
 #include <WrappedConfig.h>
-#include <Storage/FileSystem.h>
+#include <WrappedConfig/Storage/FileSystem.h>
 
-WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::FileSystem>(&LittleFS));
+auto configStorage = WrappedConfig::Storage::FileSystem(&LittleFS);
+auto config = WrappedConfig::Config(configStorage);
 
 static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {
   if (actual != expected) {

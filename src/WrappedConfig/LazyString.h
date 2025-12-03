@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: MIT
-/*
- * Copyright (C) 2023-2025 Mathieu Carbou
- */
 #pragma once
 
 #include <soc/soc.h>
@@ -347,4 +343,4 @@ namespace WrappedConfig {
         return ((intptr_t)p >= drom_start_addr && (intptr_t)p < SOC_DROM_HIGH);
       }
     };
-} // namespace WrappedConfig
+}

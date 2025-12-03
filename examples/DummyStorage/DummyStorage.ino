@@ -1,7 +1,8 @@
 #include <WrappedConfig.h>
-#include <Storage/Dummy.h>
+#include <WrappedConfig/Storage/Dummy.h>
 
-WrappedConfig::WrappedConfig config(std::make_shared<WrappedConfig::Storage::Dummy>());
+auto configStorage = WrappedConfig::Storage::Dummy();
+auto config = WrappedConfig::Config(configStorage);
 
 static void assertEquals(const WrappedConfig::Value& actual, const WrappedConfig::Value& expected) {
   if (actual != expected) {

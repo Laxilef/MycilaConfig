@@ -1,11 +1,12 @@
 #pragma once
+
 #include "Base.h"
 
 namespace WrappedConfig {
   namespace Storage {
     class Dummy : public Base {
       public:
-        void setWrapper(WrappedConfig* wrapper) override {
+        void setWrapper(Config* wrapper) override {
           _wrapper = wrapper;
         }
 
@@ -45,7 +46,7 @@ namespace WrappedConfig {
         }
 
       private:
-        WrappedConfig* _wrapper = nullptr;
+        Config* _wrapper = nullptr;
     };
   }
-} // namespace WrappedConfig
+}
